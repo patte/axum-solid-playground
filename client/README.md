@@ -32,4 +32,5 @@ Created by running:
 npx degit solidjs/templates/ts axsopl
 ```
 
-Then following: https://tailwindcss.com/docs/guides/solidjs
+Then following: https://tailwindcss.com/docs/guides/solidjs<br>
+Then following: https://www.solid-ui.com/docs/installation
