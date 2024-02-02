@@ -2,13 +2,16 @@
 name = "axum-solid-playground"
 version = "0.1.0"
 edition = "2021"
+rust-version = "1.75.0"
 authors = ["Patrick Recher <p@tte.io>"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
 axum = { version = "0.7.4", features = ["http2"] }
+dotenv = "0.15.0"
 serde = { version = "1.0.196", features = ["derive"] }
+thiserror = "1.0.56"
 tokio = { version = "1.35.1", features = ["full"] }
 tower = "0.4.13"
 tower-http = { version = "0.5.1", features = ["fs"] }
