@@ -14,7 +14,7 @@ export default defineConfig({
     tsconfigPaths(),
   ],
   server: {
-    port: 3000,
+    port: 3001,
   },
   build: {
     target: "esnext",
