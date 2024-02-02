@@ -1,30 +1,8 @@
-# Client
+# SolidJS frontend
 
 ## Usage
 
-Install dependencies:
-```bash
-$ npm instal
-```
-
-### Development
-
-```bash
-npm run dev
-```
-
-Open [http://localhost:3001](http://localhost:3001) to view it in the browser.
-
-### Build
-```bash
-npm run build
-```
-
-Builds the app for production to the `dist` folder.<br>
-It correctly bundles Solid in production mode and optimizes the build for the best performance.
-
-The build is minified and the filenames include the hashes.<br>
-Your app is ready to be deployed!
+See the combined [README](../README.md) for usage.
 
 ## Notes
 Created by running:

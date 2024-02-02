@@ -1,4 +1,7 @@
-use axum::{extract::Extension, http::StatusCode, response::IntoResponse, routing::post, Router};
+use axum::{
+    extract::Extension, http::StatusCode, response::IntoResponse, routing::get, routing::post,
+    Router,
+};
 use std::{net::SocketAddr, str::FromStr};
 use tower_sessions::{
     cookie::{time::Duration, SameSite},
@@ -16,6 +19,9 @@ extern crate tracing;
 
 mod auth;
 mod startup;
+
+#[cfg(feature = "dev_proxy")]
+mod proxy;
 
 use dotenv::dotenv;
 use std::env;
@@ -40,27 +46,38 @@ async fn main() {
         .with_secure(env::var("SESSION_SECURE").unwrap_or("true".to_string()) != "false")
         .with_expiry(Expiry::OnInactivity(Duration::seconds(360)));
 
-    // build our application with a route
-    let app = Router::new()
+    // listen
+    let addr = SocketAddr::from_str(&env::var("LISTEN_HOST_PORT").unwrap())
+        .expect("Invalid LISTEN_HOST_PORT environment variable");
+    let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
+
+    let router = Router::new()
         .route("/register_start/:username", post(start_register))
         .route("/register_finish", post(finish_register))
         .route("/login_start/:username", post(start_authentication))
         .route("/login_finish", post(finish_authentication))
+        .route("/health", get(|| async { "OK" }))
         .layer(Extension(app_state))
         .layer(session_layer)
         .fallback(handler_404);
 
-    let app = Router::new().merge(app).nest_service(
-        "/",
-        tower_http::services::ServeDir::new("../client/release"),
-    );
+    #[cfg(not(feature = "dev_proxy"))]
+    {
+        axum::serve(listener, router).await.unwrap();
+    }
 
-    //run
-    let addr = SocketAddr::from_str(&env::var("LISTEN_HOST_PORT").unwrap())
-        .expect("Invalid LISTEN_HOST_PORT environment variable");
-    let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
+    #[cfg(feature = "dev_proxy")]
+    {
+        let client = proxy::get_client();
+        let router = Router::new()
+            .route("/", get(proxy::proxy_handler))
+            .route("/*key", get(proxy::proxy_handler))
+            .merge(router)
+            .with_state(client);
+        axum::serve(listener, router).await.unwrap();
+    }
+
     info!("listening on {addr}");
-    axum::serve(listener, app).await.unwrap();
 }
 
 async fn handler_404() -> impl IntoResponse {

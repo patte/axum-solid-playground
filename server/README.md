@@ -1,9 +1,5 @@
-# Server
+# rust axum backend
 
 ## Usage
 
-### Development
-
-```bash
-cargo watch -x run
-```
+See the combined [README](../README.md) for usage.

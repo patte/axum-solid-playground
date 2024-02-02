@@ -14,7 +14,14 @@ export default defineConfig({
     tsconfigPaths(),
   ],
   server: {
+    host: "localhost",
     port: 3001,
+    // this is necessary for hmr to not use the axum proxy
+    // but still connect directly to vite
+    hmr: {
+      path: "/socket.io",
+      clientPort: 3001,
+    },
   },
   build: {
     target: "esnext",
