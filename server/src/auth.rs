@@ -10,6 +10,7 @@ use tower_sessions::Session;
 use webauthn_rs::prelude::*;
 
 // Webauthn RS auth handlers.
+// adapted for "conditional-ui" (no username required for authentication) based on the example here:
 // source: https://github.com/kanidm/webauthn-rs/blob/master/tutorial/server/axum/src/auth.rs
 
 // The registration flow:
@@ -19,6 +20,7 @@ use webauthn_rs::prelude::*;
 //          └───────────────┘     └───────────────┘      └───────────────┘
 //                  │                     │                      │
 //                  │                     │     1. Start Reg     │
+//                  │                     │    (with username)   │
 //                  │                     │─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─▶│
 //                  │                     │                      │
 //                  │                     │     2. Challenge     │
@@ -43,10 +45,7 @@ use webauthn_rs::prelude::*;
 //                  │                     │                      │
 //
 
-// In this step, we are responding to the start reg(istration) request, and providing
-// the challenge to the browser.
-// curl -X POST http://localhost:3000/register_start/your_username
-
+// respond to the start registration request, provide the challenge to the browser.
 pub async fn start_register(
     Extension(app_state): Extension<AppState>,
     session: Session,
@@ -68,6 +67,8 @@ pub async fn start_register(
             .copied()
             .unwrap_or_else(Uuid::new_v4)
     };
+
+    info!("reg user_unique_id: {:?}", user_unique_id);
 
     // Remove any previous registrations that may have occured from the session.
     session
@@ -109,10 +110,8 @@ pub async fn start_register(
     Ok(res)
 }
 
-// The browser has completed it's steps and the user has created a public key
-// on their device. Now we have the registration options sent to us, and we need
-// to verify these and persist them.
-
+// The browser has completed navigator.credentials.create and created a public key
+// on their device. Verify the registration options and persist them.
 pub async fn finish_register(
     Extension(app_state): Extension<AppState>,
     session: Session,
@@ -166,6 +165,7 @@ pub async fn finish_register(
 //          └───────────────┘     └───────────────┘      └───────────────┘
 //                  │                     │                      │
 //                  │                     │     1. Start Auth    │
+//                  │                     │     (no username)    │
 //                  │                     │─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─▶│
 //                  │                     │                      │
 //                  │                     │     2. Challenge     │
@@ -186,11 +186,11 @@ pub async fn finish_register(
 //                  │                     │                      │
 
 // The user indicates the wish to start authentication and we need to provide a challenge.
-
+// we use start_discoverable_authentication instead of start_passkey_authentication to allow
+// the user to select a key to authenticate with.
 pub async fn start_authentication(
     Extension(app_state): Extension<AppState>,
     session: Session,
-    Path(username): Path<String>,
 ) -> Result<impl IntoResponse, WebauthnError> {
     info!("Start Authentication");
 
@@ -200,34 +200,13 @@ pub async fn start_authentication(
         .await
         .expect("Failed to remove auth_state from session");
 
-    // Get the set of keys that the user possesses
-    let users_guard = app_state.users.lock().await;
-
-    // Look up their unique id from the username
-    let user_unique_id = users_guard
-        .name_to_id
-        .get(&username)
-        .copied()
-        .ok_or(WebauthnError::UserNotFound)?;
-
-    let allow_credentials = users_guard
-        .keys
-        .get(&user_unique_id)
-        .ok_or(WebauthnError::UserHasNoCredentials)?;
-
-    let res = match app_state
-        .webauthn
-        .start_passkey_authentication(allow_credentials)
-    {
+    let res = match app_state.webauthn.start_discoverable_authentication() {
         Ok((rcr, auth_state)) => {
-            // Drop the mutex to allow the mut borrows below to proceed
-            drop(users_guard);
-
             // Note that due to the session store in use being a server side memory store, this is
             // safe to store the auth_state into the session since it is not client controlled and
             // not open to replay attacks. If this was a cookie store, this would be UNSAFE.
             session
-                .insert("auth_state", (user_unique_id, auth_state))
+                .insert("auth_state", auth_state)
                 .await
                 .expect("Failed to insert");
             Json(rcr)
@@ -240,17 +219,15 @@ pub async fn start_authentication(
     Ok(res)
 }
 
-// The browser and user have completed their part of the processing. Only in the
-// case that the webauthn authenticate call returns Ok, is authentication considered
-// a success. If the browser does not complete this call, or *any* error occurs,
-// this is an authentication failure.
-
+// The browser and user have completed navigator.credentials.get.
+// We need to check if a user exists for the claimed uuid, check if
+// the used credential belongs to the user, and verify the signature.
 pub async fn finish_authentication(
     Extension(app_state): Extension<AppState>,
     session: Session,
     Json(auth): Json<PublicKeyCredential>,
 ) -> Result<impl IntoResponse, WebauthnError> {
-    let (user_unique_id, auth_state): (Uuid, PasskeyAuthentication) = session
+    let auth_state: DiscoverableAuthentication = session
         .get("auth_state")
         .await?
         .ok_or(WebauthnError::CorruptSession)?;
@@ -260,12 +237,39 @@ pub async fn finish_authentication(
         .await
         .expect("Failed to remove auth_state from session");
 
-    let res = match app_state
+    let creds = match app_state
         .webauthn
-        .finish_passkey_authentication(&auth, &auth_state)
+        .identify_discoverable_authentication(&auth)
     {
+        Ok(creds) => creds,
+        Err(e) => {
+            info!("challenge_register -> {:?}", e);
+            return Err(WebauthnError::InvalidUserUniqueId);
+        }
+    };
+
+    let user_unique_id = creds.0;
+
+    // find key for user that matches creds.1
+    let mut users_guard = app_state.users.lock().await;
+
+    let passkey = users_guard
+        .keys
+        .get(&user_unique_id)
+        .and_then(|keys| {
+            keys.iter()
+                .find(|sk| sk.cred_id() == creds.1)
+                .map(|sk| sk.clone())
+        })
+        .ok_or(WebauthnError::UserNotFound)?;
+
+    let res = match app_state.webauthn.finish_discoverable_authentication(
+        &auth,
+        auth_state,
+        &[DiscoverableKey::from(passkey)],
+    ) {
         Ok(auth_result) => {
-            let mut users_guard = app_state.users.lock().await;
+            info!("auth_result: {:?}", auth_result);
 
             // Update the credential counter, if possible.
             users_guard
@@ -280,13 +284,33 @@ pub async fn finish_authentication(
                     })
                 })
                 .ok_or(WebauthnError::UserHasNoCredentials)?;
-            StatusCode::OK
+
+            // get username for user_unique_id
+            let username = users_guard
+                .name_to_id
+                .iter()
+                .find(|(_, id)| **id == user_unique_id)
+                .map(|(name, _)| name)
+                .ok_or(WebauthnError::UserNotFound)?;
+
+            Json(User {
+                id: user_unique_id,
+                username: username.to_string(),
+            })
         }
         Err(e) => {
             info!("challenge_register -> {:?}", e);
-            StatusCode::BAD_REQUEST
+            return Err(WebauthnError::Unknown);
         }
     };
     info!("Authentication Successful!");
     Ok(res)
+}
+
+// TODO: cleanup
+use serde::Serialize;
+#[derive(Serialize)]
+struct User {
+    id: Uuid,
+    username: String,
 }

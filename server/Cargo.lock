@@ -202,6 +202,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "base64urlsafedata"
+version = "0.1.3"
+source = "git+https://github.com/kanidm/webauthn-rs.git#d278c56adfa39a0723c79bdcd461644194bc5138"
+dependencies = [
+ "base64 0.21.7",
+ "paste",
+ "serde",
+]
+
+[[package]]
 name = "bitflags"
 version = "1.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -241,7 +251,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7aa76ef19968577838a34d02848136bb9b6bdbfd7675fb968fe9c931bc434b33"
 dependencies = [
  "base64 0.13.1",
- "base64urlsafedata",
+ "base64urlsafedata 0.1.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "hex",
  "openssl",
  "serde",
@@ -845,6 +855,12 @@ dependencies = [
  "smallvec",
  "windows-targets",
 ]
+
+[[package]]
+name = "paste"
+version = "1.0.14"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "de3145af08024dea9fa9914f381a17b8fc6034dfb00f3a84013f7ff43f29ed4c"
 
 [[package]]
 name = "percent-encoding"
@@ -1584,12 +1600,23 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9c8d87e72b64a3b4db28d11ce29237c246188f4f51057d65a7eab63b7987e423"
 
 [[package]]
-name = "webauthn-rs"
-version = "0.4.8"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2db00711c712414e93b019c4596315085792215bc2ac2d5872f9e8913b0a6316"
+name = "webauthn-attestation-ca"
+version = "0.1.0"
+source = "git+https://github.com/kanidm/webauthn-rs.git#d278c56adfa39a0723c79bdcd461644194bc5138"
 dependencies = [
- "base64urlsafedata",
+ "base64urlsafedata 0.1.3 (git+https://github.com/kanidm/webauthn-rs.git)",
+ "openssl",
+ "serde",
+ "tracing",
+ "uuid",
+]
+
+[[package]]
+name = "webauthn-rs"
+version = "0.5.0-dev"
+source = "git+https://github.com/kanidm/webauthn-rs.git#d278c56adfa39a0723c79bdcd461644194bc5138"
+dependencies = [
+ "base64urlsafedata 0.1.3 (git+https://github.com/kanidm/webauthn-rs.git)",
  "serde",
  "tracing",
  "url",
@@ -1599,17 +1626,17 @@ dependencies = [
 
 [[package]]
 name = "webauthn-rs-core"
-version = "0.4.9"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "294c78c83f12153a51e1cf1e6970b5da1397645dada39033a9c3173a8fc4fc2b"
+version = "0.5.0-dev"
+source = "git+https://github.com/kanidm/webauthn-rs.git#d278c56adfa39a0723c79bdcd461644194bc5138"
 dependencies = [
- "base64 0.13.1",
- "base64urlsafedata",
+ "base64 0.21.7",
+ "base64urlsafedata 0.1.3 (git+https://github.com/kanidm/webauthn-rs.git)",
  "compact_jwt",
  "der-parser",
  "nom",
  "openssl",
  "rand",
+ "rand_chacha",
  "serde",
  "serde_cbor_2",
  "serde_json",
@@ -1617,17 +1644,17 @@ dependencies = [
  "tracing",
  "url",
  "uuid",
+ "webauthn-attestation-ca",
  "webauthn-rs-proto",
  "x509-parser",
 ]
 
 [[package]]
 name = "webauthn-rs-proto"
-version = "0.4.9"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d24e638361a63ba5c0a0be6a60229490fcdf33740ed63df5bb6bdb627b52a138"
+version = "0.5.0-dev"
+source = "git+https://github.com/kanidm/webauthn-rs.git#d278c56adfa39a0723c79bdcd461644194bc5138"
 dependencies = [
- "base64urlsafedata",
+ "base64urlsafedata 0.1.3 (git+https://github.com/kanidm/webauthn-rs.git)",
  "serde",
  "serde_json",
  "url",

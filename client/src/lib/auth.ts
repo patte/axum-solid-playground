@@ -1,4 +1,9 @@
-import { Base64 } from "js-base64";
+import {
+  authenticationPublicKeyCredentialToJSON,
+  parsePublicKeyCreationOptionsFromJSON,
+  parsePublicKeyRequestOptionsFromJSON,
+  registrationPublicKeyCredentialToJSON,
+} from "./webauthn";
 
 function check_credentials_support() {
   if (!navigator.credentials) {
@@ -8,82 +13,37 @@ function check_credentials_support() {
   }
 }
 
-// parse json (into required uint8array from base64)
-function publicKeyCredentialCreationOptionsFromJSON(
-  publicKey: any,
-  addPrfExtension: boolean = false
-): PublicKeyCredentialCreationOptions {
-  const firstSalt = addPrfExtension
-    ? new Uint8Array(new Array(32).fill(1)).buffer
-    : undefined;
-  return {
-    ...publicKey,
-    challenge: Base64.toUint8Array(publicKey.challenge),
-    user: {
-      ...publicKey.user,
-      id: Base64.toUint8Array(publicKey.user.id),
-    },
-    excludeCredentials: publicKey.excludeCredentials?.map((cred: any) => {
-      return {
-        ...cred,
-        id: Base64.toUint8Array(cred.id),
-      };
-    }),
-    extensions: {
-      ...publicKey.extensions,
-      ...(addPrfExtension
-        ? {
-            prf: {
-              eval: {
-                first: firstSalt,
-              },
-            },
-          }
-        : {}),
-    },
-  };
-}
-
-// stringify credential (convert uint8array to base64)
-function publicKeyCredentialToJSON(credential: PublicKeyCredential): string {
-  return JSON.stringify({
-    id: credential.id,
-    rawId: Base64.fromUint8Array(new Uint8Array(credential.rawId), true),
-    response: {
-      attestationObject: Base64.fromUint8Array(
-        // @ts-ignore
-        new Uint8Array(credential.response.attestationObject),
-        true
-      ),
-      clientDataJSON: Base64.fromUint8Array(
-        new Uint8Array(credential.response.clientDataJSON),
-        true
-      ),
-    },
-    type: credential.type,
-  });
-}
-
 const includePrfExtension = true;
 
 export async function register({ username }: { username: string }) {
   check_credentials_support();
 
-  const ccr = await fetch(`/register_start/${username}`, {
+  const creationChallengeResponse = await fetch(`/register_start/${username}`, {
     method: "POST",
   }).then((res) => {
     if (!res.ok) {
-      throw new Error(res.statusText);
+      throw new Error(`register_start failed: ${res.statusText}`);
     }
     return res.json() as Promise<any>;
   });
-  if (!ccr.publicKey) {
+  if (!creationChallengeResponse.publicKey) {
     throw new Error("Registration failed - no publicKey");
   }
-  const publicKey = publicKeyCredentialCreationOptionsFromJSON(
-    ccr.publicKey,
-    includePrfExtension
+  const publicKey = parsePublicKeyCreationOptionsFromJSON(
+    creationChallengeResponse.publicKey
   );
+
+  if (includePrfExtension) {
+    publicKey.extensions = {
+      ...publicKey.extensions,
+      // @ts-ignore
+      prf: {
+        eval: {
+          first: new Uint8Array(new Array(32).fill(1)).buffer,
+        },
+      },
+    };
+  }
 
   const regCredential = (await navigator.credentials.create({
     publicKey,
@@ -99,17 +59,66 @@ export async function register({ username }: { username: string }) {
     console.log(`PRF supported: ${!!extensionResults?.prf?.enabled}`);
   }
 
-  const crr = await fetch(`/register_finish`, {
+  const creationResult = await fetch(`/register_finish`, {
     method: "POST",
-    body: publicKeyCredentialToJSON(regCredential),
+    body: registrationPublicKeyCredentialToJSON(regCredential),
     headers: {
       "Content-Type": "application/json",
     },
   });
 
-  if (!crr.ok) {
-    throw new Error(crr.statusText);
+  if (!creationResult.ok) {
+    throw new Error(`register_finish failed: ${creationResult.statusText}`);
   }
   console.log("Registration complete");
   return true;
+}
+
+export type User = {
+  id: string;
+  username: string;
+};
+
+export async function authenticate() {
+  check_credentials_support();
+
+  const requestChallengeResponse = await fetch(`/authenticate_start`, {
+    method: "POST",
+  }).then((res) => {
+    if (!res.ok) {
+      throw new Error(`authenticate_start failed: ${res.statusText}`);
+    }
+    return res.json() as Promise<any>;
+  });
+  if (!requestChallengeResponse.publicKey) {
+    throw new Error("Authentication failed - no publicKey");
+  }
+  const publicKey = parsePublicKeyRequestOptionsFromJSON(
+    requestChallengeResponse.publicKey
+  );
+
+  const authCredential = (await navigator.credentials.get({
+    publicKey,
+  })) as PublicKeyCredential | null;
+  if (!authCredential) {
+    throw new Error("Authentication failed - navigator.credentials.get");
+  }
+
+  const authResult = await fetch(`/authenticate_finish`, {
+    method: "POST",
+    body: authenticationPublicKeyCredentialToJSON(authCredential),
+    headers: {
+      "Content-Type": "application/json",
+    },
+  });
+
+  if (!authResult.ok) {
+    // TODO cleanup error handling: this is the way:
+    throw new Error(`authenticate_finish failed: ${await authResult.text()}`);
+  }
+
+  const user = await authResult.json();
+
+  console.log("Authentication complete");
+  return user;
 }

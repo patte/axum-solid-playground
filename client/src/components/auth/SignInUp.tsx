@@ -10,23 +10,43 @@ import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
 import { TbKey, TbLoader } from "solid-icons/tb";
 import InputError from "~/components/InputError";
-import { register } from "~/lib/auth";
+import { register, authenticate } from "~/lib/auth";
 import { createSignal } from "solid-js";
+import { useAuth } from "./AuthContext";
 
 function UserAuthForm() {
   const [authForm, { Form, Field }] = createForm<AuthForm>();
   const [authError, setAuthError] = createSignal<string | null>(null);
+  const { signIn } = useAuth();
 
   const handleSubmitRegister: SubmitHandler<AuthForm> = (values) => {
+    setAuthError(null);
     return new Promise((resolve) =>
       setTimeout(() => {
-        register({ username: values.username }).catch((error) => {
-          setAuthError(error.message);
-          throw error;
-        });
+        const username = values.username;
+        register({ username })
+          .then(() => {
+            signIn(username);
+          })
+          .catch((error) => {
+            setAuthError(error.message);
+            throw error;
+          });
         resolve(true);
       }, 800)
     );
+  };
+
+  const handleClickSignIn: (e: Event) => void = (e) => {
+    setAuthError(null);
+    authenticate()
+      .then((user) => {
+        signIn(user.username);
+      })
+      .catch((error) => {
+        setAuthError(error.message);
+        throw error;
+      });
   };
 
   return (
@@ -70,7 +90,12 @@ function UserAuthForm() {
           </span>
         </div>
       </div>
-      <Button variant="outline" type="button" disabled={authForm.submitting}>
+      <Button
+        variant="outline"
+        type="button"
+        disabled={authForm.submitting}
+        onClick={handleClickSignIn}
+      >
         {authForm.submitting ? (
           <TbLoader class="mr-2 h-4 w-4 animate-spin" />
         ) : (
