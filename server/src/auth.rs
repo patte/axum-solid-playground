@@ -54,6 +54,11 @@ pub async fn start_register(
 ) -> Result<impl IntoResponse, WebauthnError> {
     info!("Start register");
 
+    // check username
+    if username.len() < 3 || username.len() > 24 {
+        return Err(WebauthnError::InvalidUsername);
+    }
+
     // Since a user's username could change at anytime, we need to bind to a unique id.
     let user_unique_id = {
         let users_guard = app_state.users.lock().await;
@@ -93,7 +98,7 @@ pub async fn start_register(
                 .insert("reg_state", (username, user_unique_id, reg_state))
                 .await
                 .expect("Failed to insert");
-            info!("Registration Successful!");
+            info!("Start register successful!");
             Json(ccr)
         }
         Err(e) => {
@@ -142,10 +147,11 @@ pub async fn finish_register(
 
             users_guard.name_to_id.insert(username, user_unique_id);
 
+            info!("finish register successful!");
             StatusCode::OK
         }
         Err(e) => {
-            error!("challenge_register -> {:?}", e);
+            error!("finish_passkey_registration: {:?}", e);
             StatusCode::BAD_REQUEST
         }
     };

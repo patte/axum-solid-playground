@@ -16,6 +16,8 @@ pub enum WebauthnError {
     UserHasNoCredentials,
     #[error("Deserialising Session failed: {0}")]
     InvalidSessionState(#[from] tower_sessions::session::Error),
+    #[error("Username must be between 3 and 24 characters")]
+    InvalidUsername,
 }
 impl IntoResponse for WebauthnError {
     fn into_response(self) -> Response {
@@ -25,6 +27,7 @@ impl IntoResponse for WebauthnError {
             WebauthnError::Unknown => "Unknown Error",
             WebauthnError::UserHasNoCredentials => "User Has No Credentials",
             WebauthnError::InvalidSessionState(_) => "Deserialising Session failed",
+            WebauthnError::InvalidUsername => "Username must be between 3 and 24 characters",
         };
 
         // its often easiest to implement `IntoResponse` by calling other implementations

@@ -10,16 +10,20 @@ import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
 import { TbKey, TbLoader } from "solid-icons/tb";
 import InputError from "~/components/InputError";
-import { useAuth } from "~/components/auth/AuthContext";
+import { register } from "~/lib/auth";
+import { createSignal } from "solid-js";
 
 function UserAuthForm() {
   const [authForm, { Form, Field }] = createForm<AuthForm>();
-  const { signIn } = useAuth();
+  const [authError, setAuthError] = createSignal<string | null>(null);
 
-  const handleSubmit: SubmitHandler<AuthForm> = (values) => {
+  const handleSubmitRegister: SubmitHandler<AuthForm> = (values) => {
     return new Promise((resolve) =>
       setTimeout(() => {
-        signIn(values.username);
+        register({ username: values.username }).catch((error) => {
+          setAuthError(error.message);
+          throw error;
+        });
         resolve(true);
       }, 800)
     );
@@ -27,7 +31,7 @@ function UserAuthForm() {
 
   return (
     <div class="grid gap-6">
-      <Form onSubmit={handleSubmit}>
+      <Form onSubmit={handleSubmitRegister}>
         <Grid class="gap-4">
           <Field
             name="username"
@@ -74,6 +78,9 @@ function UserAuthForm() {
         )}{" "}
         Passkey
       </Button>
+      {authError() && (
+        <p class="text-red-500 text-sm text-center">{authError()}</p>
+      )}
     </div>
   );
 }
