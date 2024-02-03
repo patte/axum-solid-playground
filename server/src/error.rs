@@ -20,6 +20,8 @@ pub enum WebauthnError {
     InvalidUsername,
     #[error("Invalid UserID supplied during authentication")]
     InvalidUserUniqueId,
+    #[error("Username already exists. Please login or choose a different username.")]
+    UsernameAlreadyExists,
 }
 impl IntoResponse for WebauthnError {
     fn into_response(self) -> Response {
@@ -31,6 +33,9 @@ impl IntoResponse for WebauthnError {
             WebauthnError::InvalidSessionState(_) => "Deserialising Session failed",
             WebauthnError::InvalidUsername => "Username must be between 3 and 24 characters",
             WebauthnError::InvalidUserUniqueId => "Invalid UserID supplied during authentication",
+            WebauthnError::UsernameAlreadyExists => {
+                "Username already exists. Please sign in or choose a different username."
+            }
         };
 
         // its often easiest to implement `IntoResponse` by calling other implementations

@@ -9,27 +9,33 @@ import { Grid } from "~/components/ui/grid";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
 import { TbKey, TbLoader } from "solid-icons/tb";
-import InputError from "~/components/InputError";
+import { InputError, GenericError } from "~/components/InputError";
 import { register, authenticate } from "~/lib/auth";
 import { createSignal } from "solid-js";
 import { useAuth } from "./AuthContext";
 
 function UserAuthForm() {
   const [authForm, { Form, Field }] = createForm<AuthForm>();
-  const [authError, setAuthError] = createSignal<string | null>(null);
+  const [registrationError, setRegistrationError] = createSignal<string | null>(
+    null
+  );
+  const [authenticationError, setAuthenticationError] = createSignal<
+    string | null
+  >(null);
   const { signIn } = useAuth();
 
   const handleSubmitRegister: SubmitHandler<AuthForm> = (values) => {
-    setAuthError(null);
+    setRegistrationError(null);
+    setAuthenticationError(null);
     return new Promise((resolve) =>
       setTimeout(() => {
         const username = values.username;
         register({ username })
-          .then(() => {
-            signIn(username);
+          .then((user) => {
+            signIn(user);
           })
           .catch((error) => {
-            setAuthError(error.message);
+            setRegistrationError(error.message);
             throw error;
           });
         resolve(true);
@@ -38,13 +44,14 @@ function UserAuthForm() {
   };
 
   const handleClickSignIn: (e: Event) => void = (e) => {
-    setAuthError(null);
+    setRegistrationError(null);
+    setAuthenticationError(null);
     authenticate()
       .then((user) => {
-        signIn(user.username);
+        signIn(user);
       })
       .catch((error) => {
-        setAuthError(error.message);
+        setAuthenticationError(error.message);
         throw error;
       });
   };
@@ -73,13 +80,16 @@ function UserAuthForm() {
             )}
           </Field>
           <Button type="submit" disabled={authForm.submitting}>
-            {authForm.submitting && (
+            {authForm.submitting ? (
               <TbLoader class="mr-2 h-4 w-4 animate-spin" />
-            )}
+            ) : (
+              <TbKey class="mr-2 h-4 w-4" />
+            )}{" "}
             Create account
           </Button>
         </Grid>
       </Form>
+      {registrationError() && <GenericError error={registrationError()} />}
       <div class="relative">
         <div class="absolute inset-0 flex items-center">
           <span class="w-full border-t" />
@@ -90,6 +100,7 @@ function UserAuthForm() {
           </span>
         </div>
       </div>
+
       <Button
         variant="outline"
         type="button"
@@ -101,11 +112,10 @@ function UserAuthForm() {
         ) : (
           <TbKey class="mr-2 h-4 w-4" />
         )}{" "}
-        Passkey
+        Login
       </Button>
-      {authError() && (
-        <p class="text-red-500 text-sm text-center">{authError()}</p>
-      )}
+
+      {authenticationError() && <GenericError error={authenticationError()} />}
     </div>
   );
 }

@@ -5,7 +5,7 @@ import {
   registrationPublicKeyCredentialToJSON,
 } from "./webauthn";
 
-function check_credentials_support() {
+function ensure_credentials_support() {
   if (!navigator.credentials) {
     throw new Error(
       "Credentials API not supported, please use a different browser."
@@ -13,22 +13,45 @@ function check_credentials_support() {
   }
 }
 
+// use text body if available, otherwise status and statusText
+async function getErrorMessage(
+  response: Response,
+  location: string | undefined
+) {
+  return response
+    .text()
+    .catch(
+      () =>
+        `${response.status} - ${response.statusText}${
+          location ? " at" + location : ""
+        }`
+    );
+}
+
 const includePrfExtension = true;
 
-export async function register({ username }: { username: string }) {
-  check_credentials_support();
+export type User = {
+  id: string;
+  username: string;
+};
 
+export async function register({
+  username,
+}: {
+  username: string;
+}): Promise<User> {
+  ensure_credentials_support();
+
+  // get challenge from server
   const creationChallengeResponse = await fetch(`/register_start/${username}`, {
     method: "POST",
-  }).then((res) => {
+  }).then(async (res) => {
     if (!res.ok) {
-      throw new Error(`register_start failed: ${res.statusText}`);
+      throw new Error(await getErrorMessage(res, "register_start"));
     }
     return res.json() as Promise<any>;
   });
-  if (!creationChallengeResponse.publicKey) {
-    throw new Error("Registration failed - no publicKey");
-  }
+
   const publicKey = parsePublicKeyCreationOptionsFromJSON(
     creationChallengeResponse.publicKey
   );
@@ -45,20 +68,29 @@ export async function register({ username }: { username: string }) {
     };
   }
 
-  const regCredential = (await navigator.credentials.create({
-    publicKey,
-  })) as PublicKeyCredential | null;
-  if (!regCredential) {
-    throw new Error("Registration failed - navigator.credentials.create");
+  // let authenticator create credential
+  const _regCredential = await navigator.credentials
+    .create({
+      publicKey,
+    })
+    .catch((e) => {
+      throw new Error(e.message + " - Please try again or another browser.");
+    });
+  if (!_regCredential) {
+    throw new Error(
+      "Registration failed: no credential - this should't happen!"
+    );
   }
+  const regCredential = _regCredential as PublicKeyCredential;
 
   if (includePrfExtension) {
-    const extensionResults = regCredential?.getClientExtensionResults();
+    const extensionResults = regCredential.getClientExtensionResults();
     console.log(extensionResults);
     // @ts-ignore
     console.log(`PRF supported: ${!!extensionResults?.prf?.enabled}`);
   }
 
+  // send credential to server
   const creationResult = await fetch(`/register_finish`, {
     method: "POST",
     body: registrationPublicKeyCredentialToJSON(regCredential),
@@ -68,42 +100,47 @@ export async function register({ username }: { username: string }) {
   });
 
   if (!creationResult.ok) {
-    throw new Error(`register_finish failed: ${creationResult.statusText}`);
+    throw new Error(await getErrorMessage(creationResult, "register_finish"));
   }
   console.log("Registration complete");
-  return true;
+
+  const user = await creationResult.json();
+  return user;
 }
 
-export type User = {
-  id: string;
-  username: string;
-};
-
 export async function authenticate() {
-  check_credentials_support();
+  ensure_credentials_support();
 
+  // get challenge from server
   const requestChallengeResponse = await fetch(`/authenticate_start`, {
     method: "POST",
-  }).then((res) => {
+  }).then(async (res) => {
     if (!res.ok) {
-      throw new Error(`authenticate_start failed: ${res.statusText}`);
+      throw new Error(await getErrorMessage(res, "authenticate_start"));
     }
     return res.json() as Promise<any>;
   });
-  if (!requestChallengeResponse.publicKey) {
-    throw new Error("Authentication failed - no publicKey");
-  }
+
   const publicKey = parsePublicKeyRequestOptionsFromJSON(
     requestChallengeResponse.publicKey
   );
 
-  const authCredential = (await navigator.credentials.get({
-    publicKey,
-  })) as PublicKeyCredential | null;
-  if (!authCredential) {
-    throw new Error("Authentication failed - navigator.credentials.get");
+  // let authenticator create credential
+  const _authCredential = await navigator.credentials
+    .get({
+      publicKey,
+    })
+    .catch((e) => {
+      throw new Error(e.message + " - Please try again or another browser.");
+    });
+  if (!_authCredential) {
+    throw new Error(
+      "Authentication failed: no credential - this should't happen!"
+    );
   }
+  const authCredential = _authCredential as PublicKeyCredential;
 
+  // send credential to server
   const authResult = await fetch(`/authenticate_finish`, {
     method: "POST",
     body: authenticationPublicKeyCredentialToJSON(authCredential),
@@ -113,12 +150,11 @@ export async function authenticate() {
   });
 
   if (!authResult.ok) {
-    // TODO cleanup error handling: this is the way:
     throw new Error(`authenticate_finish failed: ${await authResult.text()}`);
   }
 
-  const user = await authResult.json();
-
   console.log("Authentication complete");
+
+  const user = await authResult.json();
   return user;
 }

@@ -58,6 +58,14 @@ pub async fn start_register(
         return Err(WebauthnError::InvalidUsername);
     }
 
+    // check if username is already registered
+    {
+        let users_guard = app_state.users.lock().await;
+        if users_guard.name_to_id.contains_key(&username) {
+            return Err(WebauthnError::UsernameAlreadyExists);
+        }
+    }
+
     // Since a user's username could change at anytime, we need to bind to a unique id.
     let user_unique_id = {
         let users_guard = app_state.users.lock().await;
@@ -117,13 +125,14 @@ pub async fn finish_register(
     session: Session,
     Json(reg): Json<RegisterPublicKeyCredential>,
 ) -> Result<impl IntoResponse, WebauthnError> {
-    let (username, user_unique_id, reg_state) = match session.get("reg_state").await? {
-        Some((username, user_unique_id, reg_state)) => (username, user_unique_id, reg_state),
-        None => {
-            error!("Failed to get session");
-            return Err(WebauthnError::CorruptSession);
-        }
-    };
+    let (username, user_unique_id, reg_state): (String, Uuid, PasskeyRegistration) =
+        match session.get("reg_state").await? {
+            Some((username, user_unique_id, reg_state)) => (username, user_unique_id, reg_state),
+            None => {
+                error!("Failed to get session");
+                return Err(WebauthnError::CorruptSession);
+            }
+        };
 
     session
         .remove_value("reg_state")
@@ -144,14 +153,19 @@ pub async fn finish_register(
                 .and_modify(|keys| keys.push(sk.clone()))
                 .or_insert_with(|| vec![sk.clone()]);
 
-            users_guard.name_to_id.insert(username, user_unique_id);
+            users_guard
+                .name_to_id
+                .insert(username.clone(), user_unique_id);
 
             info!("finish register successful!");
-            StatusCode::OK
+            Json(User {
+                id: user_unique_id,
+                username,
+            })
         }
         Err(e) => {
             error!("finish_passkey_registration: {:?}", e);
-            StatusCode::BAD_REQUEST
+            return Err(WebauthnError::Unknown);
         }
     };
 

@@ -1,27 +1,24 @@
 import { createContext, createSignal, useContext } from "solid-js";
-
-type Session = {
-  username: string;
-};
+import { User } from "~/lib/auth";
 
 export const AuthContext = createContext<{
-  session: () => Session | null;
-  signIn: (username: string) => void;
+  me: () => User | null;
+  signIn: (user: User) => void;
   signOut: () => void;
   isSignedIn: () => boolean;
 }>();
 
-const [session, setSession] = createSignal<Session | null>(null);
+const [me, setMe] = createSignal<User | null>(null);
 
 export const authContext = {
-  session: () => session(),
-  signIn: (username: string) => {
-    setSession({ username });
+  me: () => me(),
+  signIn: (user: User) => {
+    setMe(user);
   },
   signOut: () => {
-    setSession(null);
+    setMe(null);
   },
-  isSignedIn: () => !!session(),
+  isSignedIn: () => !!me(),
 };
 
 export const useAuth = () => useContext(AuthContext)!;
