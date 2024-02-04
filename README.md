@@ -6,7 +6,7 @@ Features:
 - [x] Rust backend with axum
 - [x] SolidJS frontend
 - [x] Dev proxy for frontend
-- [x] Passkeys for authentication
+- [x] discoverable passkeys for authentication
 - [ ] Database integration
 - [ ] Deployment
 - [ ] Websockets
