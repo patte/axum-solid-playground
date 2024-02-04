@@ -3,11 +3,12 @@
 My personal playground to learn rust, axum, solidjs, and passkeys.
 
 Features:
-- [x] Rust backend with axum
-- [x] SolidJS frontend
-- [x] Dev proxy for frontend
-- [x] discoverable passkeys for authentication
-- [ ] client side session management
+- [x] Rust backend with [axum](https://github.com/tokio-rs/axum)
+- [x] [SolidJS](https://www.solidjs.com) frontend with [vite](https://vitejs.dev/)
+- [x] [solid-ui](https://www.solid-ui.com/) for UI components
+- [x] Dev proxy for frontend in backend
+- [x] Discoverable passkeys for authentication with [webauthn-rs](https://github.com/kanidm/webauthn-rs/blob/d278c56adfa39a0723c79bdcd461644194bc5138/webauthn-rs/src/lib.rs#L1270)
+- [ ] Client side session management
 - [ ] Database integration (now it's just a hashmap)
 - [ ] Deployment
 
