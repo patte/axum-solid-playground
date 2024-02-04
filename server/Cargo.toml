@@ -20,10 +20,17 @@ tower-http = { version = "0.5.1", features = ["fs"] }
 tower-sessions = "0.10.1"
 tracing = "0.1.40"
 tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
-uuid = { version = "1.7.0", features = ["v7"] }
+uuid = { version = "1.7.0", features = ["serde", "v7"] }
 #webauthn-rs = { version = "0.4.8", features = ["danger-allow-state-serialisation"] }
 # use from github to get conditional-ui feature
 webauthn-rs = { git = "https://github.com/kanidm/webauthn-rs.git", features = ["conditional-ui", "danger-allow-state-serialisation"] }
+sqlx = { version = "0.7.3", features = [ "runtime-tokio", "sqlite", "migrate", "uuid" ] }
 
 [features]
 dev_proxy = ["hyper", "hyper-util"]
+
+# Make commands in dev-dependencies available to run
+# https://github.com/rust-lang/cargo/issues/2267
+# managed by cargo-run-bin
+[package.metadata.bin]
+sqlx-cli = { version = "0.7.3", bins = ["sqlx" ] }

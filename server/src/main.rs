@@ -11,14 +11,15 @@ use tower_sessions::{
 mod error;
 
 use crate::auth::{finish_authentication, finish_register, start_authentication, start_register};
-use crate::startup::AppState;
+use crate::state::AppState;
 
 // enables !info, !warn, etc.
 #[macro_use]
 extern crate tracing;
 
 mod auth;
-mod startup;
+mod db;
+mod state;
 
 #[cfg(feature = "dev_proxy")]
 mod proxy;
@@ -33,11 +34,13 @@ async fn main() {
 
     set_default_env_var("RUST_LOG", "INFO");
     set_default_env_var("LISTEN_HOST_PORT", "127.0.0.1:3000");
+    set_default_env_var("DATABASE_URL", "sqlite://sqlite.db");
 
     // initialize tracing
     tracing_subscriber::fmt::init();
 
-    let app_state = AppState::new();
+    // initialize app state
+    let app_state = AppState::new().await;
 
     let session_store = MemoryStore::default();
     let session_layer = SessionManagerLayer::new(session_store)
