@@ -2,7 +2,6 @@ use crate::error::WebauthnError;
 use crate::startup::AppState;
 use axum::{
     extract::{Extension, Json, Path},
-    http::StatusCode,
     response::IntoResponse,
 };
 use tower_sessions::Session;
