@@ -7,10 +7,9 @@ Features:
 - [x] SolidJS frontend
 - [x] Dev proxy for frontend
 - [x] discoverable passkeys for authentication
-- [ ] Database integration
+- [ ] client side session management
+- [ ] Database integration (now it's just a hashmap)
 - [ ] Deployment
-- [ ] Websockets
-- [ ] Tests
 
 ## Development
 
