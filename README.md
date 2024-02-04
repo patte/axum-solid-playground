@@ -18,12 +18,14 @@ The rust backend includes a dev proxy for the frontend, so that the host and por
 
 In one terminal, run vite:
 ```bash
+cd client
 npm install
 npm run dev
 ```
 
 In another terminal, run the backend server:
 ```bash
+cd server
 cargo watch -x "run --features dev_proxy"
 ```
 
