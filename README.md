@@ -1,8 +1,20 @@
 # axum solidjs playground
 
+My personal playground to learn rust, axum, solidjs, and passkeys.
+
+Features:
+- [x] Rust backend with axum
+- [x] SolidJS frontend
+- [x] Dev proxy for frontend
+- [x] Passkeys for authentication
+- [ ] Database integration
+- [ ] Deployment
+- [ ] Websockets
+- [ ] Tests
+
 ## Development
 
-The rust backend includes a dev proxy for the frontend, so that the host and port for the frontend and backend is the same and no CORS issues arise and dev is as close to prod as possible.
+The rust backend includes a dev proxy for the frontend, so that the host and port for the frontend and backend is the same, no CORS issues arise and dev is as close to prod as possible while still delivering a good developer experience with hot reloading.
 
 In one terminal, run vite:
 ```bash
