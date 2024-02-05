@@ -8,6 +8,8 @@ use tower_sessions::Session;
 
 use webauthn_rs::prelude::*;
 
+use crate::store::User;
+
 // Webauthn RS auth handlers.
 // adapted for "conditional-ui" (no username required for authentication) based on the example here:
 // source: https://github.com/kanidm/webauthn-rs/blob/master/tutorial/server/axum/src/auth.rs
@@ -58,24 +60,17 @@ pub async fn start_register(
     }
 
     // check if username is already registered
+    if app_state
+        .db
+        .store
+        .check_username_exists(username.clone())
+        .await
+        .unwrap()
     {
-        let users_guard = app_state.users.lock().await;
-        if users_guard.name_to_id.contains_key(&username) {
-            return Err(WebauthnError::UsernameAlreadyExists);
-        }
+        return Err(WebauthnError::UsernameAlreadyExists);
     }
 
-    // Since a user's username could change at anytime, we need to bind to a unique id.
-    let user_unique_id = {
-        let users_guard = app_state.users.lock().await;
-        users_guard
-            .name_to_id
-            .get(&username)
-            .copied()
-            .unwrap_or_else(Uuid::new_v4)
-    };
-
-    info!("reg user_unique_id: {:?}", user_unique_id);
+    let new_user = User::new(username);
 
     // Remove any previous registrations that may have occured from the session.
     session
@@ -83,27 +78,19 @@ pub async fn start_register(
         .await
         .expect("Failed to remove reg_state from session");
 
-    // If the user has any other credentials, we exclude these here so they can't be duplicate registered.
-    let exclude_credentials = {
-        let users_guard = app_state.users.lock().await;
-        users_guard
-            .keys
-            .get(&user_unique_id)
-            .map(|keys| keys.iter().map(|sk| sk.cred_id().clone()).collect())
-    };
-
     let res = match app_state.webauthn.start_passkey_registration(
-        user_unique_id,
-        &username,
-        &username,
-        exclude_credentials,
+        new_user.id,
+        &new_user.username,
+        &new_user.username,
+        // This would only be needed if we allow users to register multiple credentials.
+        // atm register is only allowed for new users.
+        None,
     ) {
         Ok((ccr, reg_state)) => {
-            // Note that due to the session store in use being a server side memory store, this is
-            // safe to store the reg_state into the session since it is not client controlled and
-            // not open to replay attacks. If this was a cookie store, this would be UNSAFE.
+            // Store auth state in session. This is only save because session
+            // store is server side. A cookie store would enable replay attacks.
             session
-                .insert("reg_state", (username, user_unique_id, reg_state))
+                .insert("reg_state", (new_user, reg_state))
                 .await
                 .expect("Failed to insert");
             info!("Start register successful!");
@@ -124,14 +111,13 @@ pub async fn finish_register(
     session: Session,
     Json(reg): Json<RegisterPublicKeyCredential>,
 ) -> Result<impl IntoResponse, WebauthnError> {
-    let (username, user_unique_id, reg_state): (String, Uuid, PasskeyRegistration) =
-        match session.get("reg_state").await? {
-            Some((username, user_unique_id, reg_state)) => (username, user_unique_id, reg_state),
-            None => {
-                error!("Failed to get session");
-                return Err(WebauthnError::CorruptSession);
-            }
-        };
+    let (new_user, reg_state): (User, PasskeyRegistration) = match session.get("reg_state").await? {
+        Some((new_user, reg_state)) => (new_user, reg_state),
+        None => {
+            error!("Failed to get session");
+            return Err(WebauthnError::CorruptSession);
+        }
+    };
 
     session
         .remove_value("reg_state")
@@ -143,24 +129,15 @@ pub async fn finish_register(
         .finish_passkey_registration(&reg, &reg_state)
     {
         Ok(sk) => {
-            let mut users_guard = app_state.users.lock().await;
-
-            //TODO: This is where we would store the credential in a db, or persist them in some other way.
-            users_guard
-                .keys
-                .entry(user_unique_id)
-                .and_modify(|keys| keys.push(sk.clone()))
-                .or_insert_with(|| vec![sk.clone()]);
-
-            users_guard
-                .name_to_id
-                .insert(username.clone(), user_unique_id);
+            app_state
+                .db
+                .store
+                .insert_user_and_passkey(new_user.clone(), sk.clone())
+                .await
+                .unwrap();
 
             info!("finish register successful!");
-            Json(User {
-                id: user_unique_id,
-                username,
-            })
+            Json(new_user)
         }
         Err(e) => {
             error!("finish_passkey_registration: {:?}", e);
@@ -215,9 +192,8 @@ pub async fn start_authentication(
 
     let res = match app_state.webauthn.start_discoverable_authentication() {
         Ok((rcr, auth_state)) => {
-            // Note that due to the session store in use being a server side memory store, this is
-            // safe to store the auth_state into the session since it is not client controlled and
-            // not open to replay attacks. If this was a cookie store, this would be UNSAFE.
+            // Store auth state in session. This is only save because session
+            // store is server side. A cookie store would enable replay attacks.
             session
                 .insert("auth_state", auth_state)
                 .await
@@ -225,7 +201,7 @@ pub async fn start_authentication(
             Json(rcr)
         }
         Err(e) => {
-            info!("challenge_authenticate -> {:?}", e);
+            info!("Error in start_authentication: {:?}", e);
             return Err(WebauthnError::Unknown);
         }
     };
@@ -250,31 +226,31 @@ pub async fn finish_authentication(
         .await
         .expect("Failed to remove auth_state from session");
 
-    let creds = match app_state
+    // parse user_id and cred_id from the client supplied credential
+    let (user_id, cred_id) = match app_state
         .webauthn
         .identify_discoverable_authentication(&auth)
     {
         Ok(creds) => creds,
         Err(e) => {
-            info!("challenge_register -> {:?}", e);
+            info!("Error in finish_authentication: {:?}", e);
             return Err(WebauthnError::InvalidUserUniqueId);
         }
     };
 
-    let user_unique_id = creds.0;
-
-    // find key for user that matches creds.1
-    let mut users_guard = app_state.users.lock().await;
-
-    let passkey = users_guard
-        .keys
-        .get(&user_unique_id)
-        .and_then(|keys| {
-            keys.iter()
-                .find(|sk| sk.cred_id() == creds.1)
-                .map(|sk| sk.clone())
-        })
-        .ok_or(WebauthnError::UserNotFound)?;
+    // find key for user that matches cred_id
+    let passkey = match app_state
+        .db
+        .store
+        .get_passkey_for_user_and_passkey_id(user_id, Base64UrlSafeData::from(cred_id).to_string())
+        .await
+        .unwrap()
+    {
+        Some(passkey) => passkey,
+        None => {
+            return Err(WebauthnError::UserNotFound);
+        }
+    };
 
     let res = match app_state.webauthn.finish_discoverable_authentication(
         &auth,
@@ -282,48 +258,39 @@ pub async fn finish_authentication(
         &[DiscoverableKey::from(passkey)],
     ) {
         Ok(auth_result) => {
-            info!("auth_result: {:?}", auth_result);
+            // Update the credential counter if needed.
+            if auth_result.needs_update() {
+                app_state
+                    .db
+                    .store
+                    .update_passkey_for_user_and_passkey_id(
+                        user_id.clone(),
+                        Base64UrlSafeData::from(cred_id).to_string(),
+                        auth_result.counter(),
+                        auth_result.backup_state(),
+                        auth_result.backup_eligible(),
+                    )
+                    .await
+                    .unwrap();
+            }
 
-            // Update the credential counter, if possible.
-            users_guard
-                .keys
-                .get_mut(&user_unique_id)
-                .map(|keys| {
-                    keys.iter_mut().for_each(|sk| {
-                        // This will update the credential if it's the matching
-                        // one. Otherwise it's ignored. That is why it is safe to
-                        // iterate this over the full list.
-                        sk.update_credential(&auth_result);
-                    })
-                })
-                .ok_or(WebauthnError::UserHasNoCredentials)?;
+            // load user
+            let user = app_state
+                .db
+                .store
+                .get_user_by_id(user_id.clone())
+                .await
+                .unwrap();
 
-            // get username for user_unique_id
-            let username = users_guard
-                .name_to_id
-                .iter()
-                .find(|(_, id)| **id == user_unique_id)
-                .map(|(name, _)| name)
-                .ok_or(WebauthnError::UserNotFound)?;
+            // TODO: set session authenticated
 
-            Json(User {
-                id: user_unique_id,
-                username: username.to_string(),
-            })
+            Json(user)
         }
         Err(e) => {
-            info!("challenge_register -> {:?}", e);
+            info!("Error in finish_authentication: {:?}", e);
             return Err(WebauthnError::Unknown);
         }
     };
     info!("Authentication Successful!");
     Ok(res)
-}
-
-// TODO: cleanup
-use serde::Serialize;
-#[derive(Serialize)]
-struct User {
-    id: Uuid,
-    username: String,
 }

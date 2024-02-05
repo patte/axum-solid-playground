@@ -1,6 +1,6 @@
 use axum::{
     extract::Extension, http::StatusCode, response::IntoResponse, routing::get, routing::post,
-    Json, Router,
+    Router,
 };
 use std::{net::SocketAddr, str::FromStr};
 use tower_sessions::{
@@ -61,7 +61,6 @@ async fn main() {
         .route("/authenticate_start", post(start_authentication))
         .route("/authenticate_finish", post(finish_authentication))
         .route("/health", get(|| async { "OK" }))
-        .route("/testdb", get(testdb))
         .layer(Extension(app_state.await))
         .layer(session_layer)
         .fallback(handler_404);
@@ -93,18 +92,4 @@ fn set_default_env_var(key: &str, value: &str) {
     if env::var(key).is_err() {
         env::set_var(key, value);
     }
-}
-
-use crate::store::User;
-use std::time::{SystemTime, UNIX_EPOCH};
-async fn testdb(state: Extension<AppState>) -> impl IntoResponse {
-    let current_time = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap()
-        .as_secs();
-    let username = format!("test{}", current_time);
-    let new_user = User::new(username.to_string());
-    state.db.store.insert_user(new_user).await.unwrap();
-    let users = state.db.store.get_all_users().await.unwrap();
-    Json(users)
 }

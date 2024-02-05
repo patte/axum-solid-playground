@@ -1,23 +1,12 @@
-use std::collections::HashMap;
 use std::env;
 use std::sync::Arc;
-use tokio::sync::Mutex;
 use webauthn_rs::prelude::*;
 
 /*
  * server side app state and setup
  */
 
-// Configure the Webauthn instance by using the WebauthnBuilder.
-// implications: you can NOT change your rp_id (relying party id), without
-// invalidating all webauthn credentials.
-
 use crate::db::DB;
-
-pub struct Data {
-    pub name_to_id: HashMap<String, Uuid>,
-    pub keys: HashMap<Uuid, Vec<Passkey>>,
-}
 
 #[derive(Clone)]
 pub struct AppState {
@@ -25,15 +14,12 @@ pub struct AppState {
     // Alternately, you could use a reference here provided you can work out
     // lifetimes.
     pub webauthn: Arc<Webauthn>,
-    // This needs mutability, so does require a mutex.
-    pub users: Arc<Mutex<Data>>,
     pub db: DB,
 }
 
 impl AppState {
     pub async fn new() -> Self {
-        // Effective domain name.
-        // if changed, all credentials are invalidated!!
+        // Effective domain name. Ff changed, all credentials are invalidated!!
         let rp_id = env::var("RP_ID").expect("RP_ID environment variable not set");
 
         // Url containing the effective domain name
@@ -52,19 +38,9 @@ impl AppState {
         // Consume the builder and create our webauthn instance.
         let webauthn = Arc::new(builder.build().expect("Invalid configuration"));
 
-        // in memory storage
-        let users = Arc::new(Mutex::new(Data {
-            name_to_id: HashMap::new(),
-            keys: HashMap::new(),
-        }));
-
         // db
         let db = DB::new().await;
 
-        AppState {
-            webauthn,
-            users,
-            db,
-        }
+        AppState { webauthn, db }
     }
 }
