@@ -1,6 +1,6 @@
 use axum::{
     extract::Extension, http::StatusCode, response::IntoResponse, routing::get, routing::post,
-    Router,
+    Json, Router,
 };
 use std::{net::SocketAddr, str::FromStr};
 use tower_sessions::{
@@ -11,14 +11,16 @@ use tower_sessions::{
 mod error;
 
 use crate::auth::{finish_authentication, finish_register, start_authentication, start_register};
-use crate::startup::AppState;
+use crate::state::AppState;
 
 // enables !info, !warn, etc.
 #[macro_use]
 extern crate tracing;
 
 mod auth;
-mod startup;
+mod db;
+mod state;
+mod store;
 
 #[cfg(feature = "dev_proxy")]
 mod proxy;
@@ -33,10 +35,12 @@ async fn main() {
 
     set_default_env_var("RUST_LOG", "INFO");
     set_default_env_var("LISTEN_HOST_PORT", "127.0.0.1:3000");
+    set_default_env_var("DATABASE_URL", "sqlite://sqlite.db");
 
     // initialize tracing
     tracing_subscriber::fmt::init();
 
+    // initialize app state
     let app_state = AppState::new();
 
     let session_store = MemoryStore::default();
@@ -57,7 +61,8 @@ async fn main() {
         .route("/authenticate_start", post(start_authentication))
         .route("/authenticate_finish", post(finish_authentication))
         .route("/health", get(|| async { "OK" }))
-        .layer(Extension(app_state))
+        .route("/testdb", get(testdb))
+        .layer(Extension(app_state.await))
         .layer(session_layer)
         .fallback(handler_404);
 
@@ -88,4 +93,18 @@ fn set_default_env_var(key: &str, value: &str) {
     if env::var(key).is_err() {
         env::set_var(key, value);
     }
+}
+
+use crate::store::User;
+use std::time::{SystemTime, UNIX_EPOCH};
+async fn testdb(state: Extension<AppState>) -> impl IntoResponse {
+    let current_time = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_secs();
+    let username = format!("test{}", current_time);
+    let new_user = User::new(username.to_string());
+    state.db.store.insert_user(new_user).await.unwrap();
+    let users = state.db.store.get_all_users().await.unwrap();
+    Json(users)
 }

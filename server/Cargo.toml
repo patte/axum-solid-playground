@@ -24,6 +24,11 @@ uuid = { version = "1.7.0", features = ["v7"] }
 #webauthn-rs = { version = "0.4.8", features = ["danger-allow-state-serialisation"] }
 # use from github to get conditional-ui feature
 webauthn-rs = { git = "https://github.com/kanidm/webauthn-rs.git", features = ["conditional-ui", "danger-allow-state-serialisation"] }
+rusqlite = { version = "0.30.0", features = ["bundled", "uuid"] }
+tokio-rusqlite = "0.5.0"
+rusqlite_migration = { version = "1.1.0", features = ["from-directory", "alpha-async-tokio-rusqlite"] }
+include_dir = "0.7.3"
+lazy_static = "1.4.0"
 
 [features]
 dev_proxy = ["hyper", "hyper-util"]
