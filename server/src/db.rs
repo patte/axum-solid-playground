@@ -3,12 +3,12 @@ use lazy_static::lazy_static;
 use rusqlite_migration::AsyncMigrations;
 use tokio_rusqlite::Connection;
 
-use crate::store::Store;
+//use crate::store::Store;
 
 #[derive(Clone)]
 pub struct DB {
     pub conn: Connection,
-    pub store: Store,
+    //pub store: Store,
 }
 
 static MIGRATIONS_DIR: Dir = include_dir!("$CARGO_MANIFEST_DIR/migrations");
@@ -26,6 +26,19 @@ impl DB {
 
         let mut conn = Connection::open(&db_path).await.unwrap();
 
+        conn.call(move |conn| {
+            conn.execute_batch(
+                "
+                PRAGMA foreign_keys = ON;
+                PRAGMA journal_mode = WAL;
+                PRAGMA synchronous = NORMAL;
+                ",
+            )
+            .map_err(|e| e.into())
+        })
+        .await
+        .unwrap();
+
         // Update the database schema, atomically
         info!("Applying migrations...");
         MIGRATIONS
@@ -35,7 +48,7 @@ impl DB {
 
         info!("DB ready");
 
-        let store = Store::new(conn.clone()).await;
-        Self { conn, store }
+        //let store = Store::new(conn.clone()).await;
+        Self { conn } //, store }
     }
 }

@@ -22,6 +22,8 @@ pub enum WebauthnError {
     InvalidUserUniqueId,
     #[error("Username already exists. Please login or choose a different username.")]
     UsernameAlreadyExists,
+    #[error("Database error! Sorry! Please try again later.")]
+    GenericDatabaseError,
 }
 impl IntoResponse for WebauthnError {
     fn into_response(self) -> Response {
@@ -36,6 +38,7 @@ impl IntoResponse for WebauthnError {
             WebauthnError::UsernameAlreadyExists => {
                 "Username already exists. Please sign in or choose a different username."
             }
+            WebauthnError::GenericDatabaseError => "Database error! Sorry! Please try again later.",
         };
 
         // its often easiest to implement `IntoResponse` by calling other implementations

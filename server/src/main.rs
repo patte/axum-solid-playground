@@ -19,8 +19,8 @@ extern crate tracing;
 
 mod auth;
 mod db;
+mod queries;
 mod state;
-mod store;
 
 #[cfg(feature = "dev_proxy")]
 mod proxy;

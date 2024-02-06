@@ -8,8 +8,8 @@ Features:
 - [x] [solid-ui](https://www.solid-ui.com/) for UI components
 - [x] Dev proxy for frontend in backend
 - [x] Discoverable passkeys for authentication with [webauthn-rs](https://github.com/kanidm/webauthn-rs/blob/d278c56adfa39a0723c79bdcd461644194bc5138/webauthn-rs/src/lib.rs#L1270)
+- [x] Database integration (now it's just a hashmap)
 - [ ] Client side session management
-- [ ] Database integration (now it's just a hashmap)
 - [ ] Deployment
 
 ## Development
@@ -30,3 +30,9 @@ cargo watch -x "run --features dev_proxy"
 ```
 
 Open [http://localhost:3000](http://localhost:3000) to view it in the browser.
+
+### Notes
+
+Chrome (local) passkeys can be managed at [chrome://settings/passkeys](chrome://settings/passkeys).
+
+Firefox and Safari on MacOS save them in the system keychain, which can be managed in Settings -> Passwords.

@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use crate::error::WebauthnError;
 use crate::state::AppState;
 use axum::{
@@ -8,7 +10,7 @@ use tower_sessions::Session;
 
 use webauthn_rs::prelude::*;
 
-use crate::store::User;
+use crate::queries::User;
 
 // Webauthn RS auth handlers.
 // adapted for "conditional-ui" (no username required for authentication) based on the example here:
@@ -59,13 +61,19 @@ pub async fn start_register(
         return Err(WebauthnError::InvalidUsername);
     }
 
-    // check if username is already registered
+    // check if username exists
     if app_state
         .db
-        .store
-        .check_username_exists(username.clone())
+        .conn
+        .call({
+            let username = username.clone();
+            move |conn| crate::queries::check_username_exists(conn, &username).map_err(|e| e.into())
+        })
         .await
-        .unwrap()
+        .map_err(|e| {
+            error!("check_username_exists: {:?}", e);
+            WebauthnError::GenericDatabaseError
+        })?
     {
         return Err(WebauthnError::UsernameAlreadyExists);
     }
@@ -73,10 +81,10 @@ pub async fn start_register(
     let new_user = User::new(username);
 
     // Remove any previous registrations that may have occured from the session.
-    session
-        .remove_value("reg_state")
-        .await
-        .expect("Failed to remove reg_state from session");
+    session.remove_value("reg_state").await.map_err(|e| {
+        error!("Failed to remove reg_state from session: {:?}", e);
+        WebauthnError::CorruptSession
+    })?;
 
     let res = match app_state.webauthn.start_passkey_registration(
         new_user.id,
@@ -92,12 +100,15 @@ pub async fn start_register(
             session
                 .insert("reg_state", (new_user, reg_state))
                 .await
-                .expect("Failed to insert");
+                .map_err(|e| {
+                    error!("Failed to insert reg_state into session: {:?}", e);
+                    WebauthnError::CorruptSession
+                })?;
             info!("Start register successful!");
             Json(ccr)
         }
         Err(e) => {
-            info!("challenge_register -> {:?}", e);
+            info!("start_passkey_registration: {:?}", e);
             return Err(WebauthnError::Unknown);
         }
     };
@@ -111,32 +122,49 @@ pub async fn finish_register(
     session: Session,
     Json(reg): Json<RegisterPublicKeyCredential>,
 ) -> Result<impl IntoResponse, WebauthnError> {
-    let (new_user, reg_state): (User, PasskeyRegistration) = match session.get("reg_state").await? {
-        Some((new_user, reg_state)) => (new_user, reg_state),
-        None => {
-            error!("Failed to get session");
-            return Err(WebauthnError::CorruptSession);
-        }
-    };
-
-    session
-        .remove_value("reg_state")
+    let (new_user, reg_state): (User, PasskeyRegistration) = session
+        .get("reg_state")
         .await
-        .expect("Failed to remove reg_state from session");
+        .map_err(|e| {
+            error!("Failed to get reg_state from session: {:?}", e);
+            WebauthnError::CorruptSession
+        })?
+        .ok_or_else(|| {
+            error!("Failed to get session");
+            WebauthnError::CorruptSession
+        })?;
+
+    session.remove_value("reg_state").await.map_err(|e| {
+        error!("Failed to remove reg_state from session: {:?}", e);
+        WebauthnError::CorruptSession
+    })?;
 
     let res = match app_state
         .webauthn
         .finish_passkey_registration(&reg, &reg_state)
     {
         Ok(sk) => {
+            // save user and passkey to db
             app_state
                 .db
-                .store
-                .insert_user_and_passkey(new_user.clone(), sk.clone())
+                .conn
+                .call({
+                    let new_user = new_user.clone();
+                    move |conn| {
+                        crate::queries::insert_user_and_passkey(conn, new_user, sk.clone())
+                            .map_err(|e| e.into())
+                    }
+                })
                 .await
-                .unwrap();
+                .map_err(|e| {
+                    error!("insert_user_and_passkey: {:?}", e);
+                    WebauthnError::GenericDatabaseError
+                })?;
 
             info!("finish register successful!");
+
+            // TODO: set session authenticated
+
             Json(new_user)
         }
         Err(e) => {
@@ -185,10 +213,10 @@ pub async fn start_authentication(
     info!("Start Authentication");
 
     // Remove any previous authentication that may have occured from the session.
-    session
-        .remove_value("auth_state")
-        .await
-        .expect("Failed to remove auth_state from session");
+    session.remove_value("auth_state").await.map_err(|e| {
+        error!("Failed to remove auth_state from session: {:?}", e);
+        WebauthnError::CorruptSession
+    })?;
 
     let res = match app_state.webauthn.start_discoverable_authentication() {
         Ok((rcr, auth_state)) => {
@@ -197,7 +225,10 @@ pub async fn start_authentication(
             session
                 .insert("auth_state", auth_state)
                 .await
-                .expect("Failed to insert");
+                .map_err(|e| {
+                    error!("Failed to insert auth_state into session: {:?}", e);
+                    WebauthnError::CorruptSession
+                })?;
             Json(rcr)
         }
         Err(e) => {
@@ -214,22 +245,28 @@ pub async fn start_authentication(
 pub async fn finish_authentication(
     Extension(app_state): Extension<AppState>,
     session: Session,
-    Json(auth): Json<PublicKeyCredential>,
+    Json(auth_input): Json<PublicKeyCredential>,
 ) -> Result<impl IntoResponse, WebauthnError> {
     let auth_state: DiscoverableAuthentication = session
         .get("auth_state")
-        .await?
-        .ok_or(WebauthnError::CorruptSession)?;
-
-    session
-        .remove_value("auth_state")
         .await
-        .expect("Failed to remove auth_state from session");
+        .map_err(|e| {
+            error!("Failed to get auth_state from session: {:?}", e);
+            WebauthnError::CorruptSession
+        })?
+        .ok_or_else(|| {
+            error!("Failed to get session");
+            WebauthnError::CorruptSession
+        })?;
 
-    // parse user_id and cred_id from the client supplied credential
+    session.remove_value("auth_state").await.map_err(|e| {
+        error!("Failed to remove auth_state from session: {:?}", e);
+        WebauthnError::CorruptSession
+    })?;
+
     let (user_id, cred_id) = match app_state
         .webauthn
-        .identify_discoverable_authentication(&auth)
+        .identify_discoverable_authentication(&auth_input)
     {
         Ok(creds) => creds,
         Err(e) => {
@@ -238,22 +275,33 @@ pub async fn finish_authentication(
         }
     };
 
-    // find key for user that matches cred_id
-    let passkey = match app_state
+    // make string from &[u8] to be able to copy it and not have lifetime
+    // dependency on auth_input.
+    let passkey_id = Base64UrlSafeData::from(cred_id).to_string();
+
+    // try to find the used passkey for the claimed user_id
+    let passkey = app_state
         .db
-        .store
-        .get_passkey_for_user_and_passkey_id(user_id, Base64UrlSafeData::from(cred_id).to_string())
+        .conn
+        .call({
+            let passkey_id = passkey_id.clone();
+            move |conn| {
+                crate::queries::get_passkey_for_user_and_passkey_id(conn, user_id, passkey_id)
+                    .map_err(|e| e.into())
+            }
+        })
         .await
-        .unwrap()
-    {
-        Some(passkey) => passkey,
-        None => {
-            return Err(WebauthnError::UserNotFound);
-        }
-    };
+        .map_err(|e| {
+            error!("get_passkey_for_user_and_passkey_id: {:?}", e);
+            WebauthnError::GenericDatabaseError
+        })?
+        .ok_or_else(|| {
+            error!("Failed to get passkey for claimed user_id.");
+            WebauthnError::UserNotFound
+        })?;
 
     let res = match app_state.webauthn.finish_discoverable_authentication(
-        &auth,
+        &auth_input,
         auth_state,
         &[DiscoverableKey::from(passkey)],
     ) {
@@ -262,25 +310,40 @@ pub async fn finish_authentication(
             if auth_result.needs_update() {
                 app_state
                     .db
-                    .store
-                    .update_passkey_for_user_and_passkey_id(
-                        user_id.clone(),
-                        Base64UrlSafeData::from(cred_id).to_string(),
-                        auth_result.counter(),
-                        auth_result.backup_state(),
-                        auth_result.backup_eligible(),
-                    )
+                    .conn
+                    .call({
+                        let passkey_id = passkey_id.clone();
+                        move |conn| {
+                            crate::queries::update_passkey_for_user_and_passkey_id(
+                                conn,
+                                user_id,
+                                passkey_id,
+                                auth_result.counter(),
+                                auth_result.backup_state(),
+                                auth_result.backup_eligible(),
+                            )
+                            .map_err(|e| e.into())
+                        }
+                    })
                     .await
-                    .unwrap();
+                    .map_err(|e| {
+                        error!("update_passkey_for_user_and_passkey_id: {:?}", e);
+                        WebauthnError::GenericDatabaseError
+                    })?;
             }
 
             // load user
             let user = app_state
                 .db
-                .store
-                .get_user_by_id(user_id.clone())
+                .conn
+                .call(move |conn| {
+                    crate::queries::get_user_by_id(conn, user_id).map_err(|e| e.into())
+                })
                 .await
-                .unwrap();
+                .map_err(|e| {
+                    error!("get_user_by_id: {:?}", e);
+                    WebauthnError::GenericDatabaseError
+                })?;
 
             // TODO: set session authenticated
 
