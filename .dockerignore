@@ -1,0 +1,7 @@
+.env*
+sqlite.db*
+server/.env*
+server/sqlite.db*
+server/target/
+client/node_modules/
+client/dist/

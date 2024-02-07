@@ -42,6 +42,8 @@ features = ["percent-encode"]
 [dependencies.tower-sessions-core]
 features = ["deletion-task"]
 
+[profile.release]
+strip=true
 
 [features]
 dev_proxy = ["hyper", "hyper-util"]

@@ -11,9 +11,16 @@ Features:
 - [x] Database integration (custom [tokio-rusqlite store](./server/src/rusqlite_session_store.rs) for tower-sessions)
 - [x] Client side session management
 - [x] Prod: embed client js app in rust binary 
-- [ ] Deployment
+- [x] Deployment (fly.io)
 
 ## Development
+
+Copy `.env.example` to `.env`:
+```bash
+cd server
+cp .env.example .env
+cd ..
+```
 
 The rust backend includes a dev proxy for the frontend, so that the host and port for the frontend and backend is the same, no CORS issues arise and dev is as close to prod as possible while still delivering a good developer experience with hot reloading.
 
@@ -33,11 +40,32 @@ cargo watch -x "run --features dev_proxy"
 Open [http://localhost:3000](http://localhost:3000) to view it in the browser.
 
 ## Prod
+
+### Local
 [axum-embed](https://github.com/informationsea/axum-embed) is used to embed the frontend into the backend.
 
 ```bash
+cd client
 npm run build
-cargo run --release
+cd ..
+cargo build --release
+./target/release/axum-solid-playground
+```
+The resulting binary is ~8MB.
+
+### Deploy
+```bash
+fly deploy
+```
+*image size: 104 MB*
+
+#### envs
+
+```bash
+fly secrets set \
+RP_ID=axum-solid-playground.fly.dev \
+RP_ORIGIN=https://axum-solid-playground.fly.dev \
+RP_NAME=axum-solid-playground
 ```
 
 ## Docs

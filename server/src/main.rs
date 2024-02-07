@@ -2,8 +2,12 @@ use axum::{
     extract::Extension, http::StatusCode, response::IntoResponse, routing::get, routing::post,
     Router,
 };
+
+#[cfg(not(feature = "dev_proxy"))]
 use axum_embed::ServeEmbed;
+#[cfg(not(feature = "dev_proxy"))]
 use rust_embed::RustEmbed;
+
 use std::{net::SocketAddr, str::FromStr};
 use tower_cookies::CookieManagerLayer;
 use tower_sessions::{
@@ -36,6 +40,7 @@ use std::env;
 
 mod rusqlite_session_store;
 
+#[cfg(not(feature = "dev_proxy"))]
 #[derive(RustEmbed, Clone)]
 #[folder = "../client/dist/"]
 struct ClientDist;
@@ -46,7 +51,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     dotenv().ok();
 
     set_default_env_var("RUST_LOG", "INFO");
-    set_default_env_var("LISTEN_HOST_PORT", "127.0.0.1:3000");
+    set_default_env_var("LISTEN_HOST_PORT", "0.0.0.0:3000");
     set_default_env_var("DATABASE_URL", "sqlite://sqlite.db");
 
     // initialize tracing
