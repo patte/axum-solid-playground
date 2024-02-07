@@ -53,20 +53,33 @@ cargo build --release
 ```
 The resulting binary is ~8MB.
 
-### Deploy
+### fly.io
+
+#### volume
+Create volume initially:
 ```bash
-fly deploy
+fly launch --no-deploy
+
+# if no volume created during initial launch:
+# fly volumes create playground_data --region ams --size 3
 ```
-*image size: 104 MB*
 
 #### envs
-
+Set before the first deploy:
 ```bash
 fly secrets set \
 RP_ID=axum-solid-playground.fly.dev \
 RP_ORIGIN=https://axum-solid-playground.fly.dev \
-RP_NAME=axum-solid-playground
+RP_NAME=axum-solid-playground \
+DATABASE_URL=sqlite:///data/sqlite.db
 ```
+
+#### deploy
+
+```bash
+fly deploy
+```
+*image size: 104 MB*
 
 ## Docs
 
