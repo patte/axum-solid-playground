@@ -1,5 +1,8 @@
 use axum::{
-    extract::Extension, http::StatusCode, response::IntoResponse, routing::get, routing::post,
+    extract::Extension,
+    http::StatusCode,
+    response::IntoResponse,
+    routing::{get, post},
     Router,
 };
 
@@ -87,6 +90,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/authenticate_finish", post(finish_authentication))
         .route("/health", get(|| async { "OK" }))
         .route("/me", get(get_me))
+        .route("/debug", get(get_debug))
         .route("/signout", post(signout))
         .layer(Extension(app_state))
         .layer(session_layer)
@@ -128,4 +132,26 @@ fn set_default_env_var(key: &str, value: &str) {
     if env::var(key).is_err() {
         env::set_var(key, value);
     }
+}
+
+async fn get_debug(headers: axum::http::HeaderMap) -> impl IntoResponse {
+    let env_primary_region = std::env::var("PRIMARY_REGION").unwrap_or("".to_string());
+    let env_region = std::env::var("FLY_REGION").unwrap_or("".to_string());
+    let machine_is_in_primary_region = env_primary_region == env_region && env_region != "";
+    let req_region = headers
+        .get("Fly-Region")
+        .map(|v| v.to_str().unwrap_or(""))
+        .unwrap_or("");
+    let req_via = headers
+        .get("Via")
+        .map(|v| v.to_str().unwrap_or(""))
+        .unwrap_or("");
+    axum::Json(serde_json::json!({
+        "FLY_MACHINE_ID": std::env::var("FLY_MACHINE_ID").unwrap_or("".to_string()),
+        "PRIMARY_REGION": env_primary_region,
+        "FLY_REGION": env_region,
+        "machine_is_in_primary_region": machine_is_in_primary_region,
+        "req_region": req_region,
+        "req_via": req_via,
+    }))
 }

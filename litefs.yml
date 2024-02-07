@@ -22,10 +22,11 @@ exit-on-error: false
 proxy:
   addr: ":8080"
   target: "localhost:3000"
-  db: "db"
+  db: "playground.db"
   passthrough:
     - "*.ico"
     - "*.png"
+  debug: true
 
 # This section defines a list of commands to run after LiteFS has connected
 # and sync'd with the cluster. You can run multiple commands but LiteFS expects

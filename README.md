@@ -56,6 +56,8 @@ The resulting binary is ~8MB.
 
 ### fly.io
 This deployment uses [litefs](https://fly.io/docs/litefs).
+The integrated proxy forwards are write requests to the primary, read requests are served locally. [Based on this line](https://github.com/superfly/litefs/blob/63eab529dc3353e8d159e097ffc4caa7badb8cb3/http/proxy_server.go#L210) only `GET` and `HEAD` requests are read all others are forwarded to the primary.
+The db name `playground.db` must match in `DATABASE_URL` and litefs.yml `proxy.db`
 
 #### volume and litefs
 Create volume initially:
@@ -84,7 +86,13 @@ DATABASE_URL=sqlite:///litefs/playground.db
 ```bash
 fly deploy
 ```
-*image size: 104 MB*
+*image size: 104 MB* (but as our binary is only ~8MB, this is what needs to be pushed in most cases)
+
+#### add clones in other regions
+```
+# Add a clone in Johannesburg, South Africa
+fly m clone --select --region jnb
+```
 
 ## Docs
 
