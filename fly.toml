@@ -22,5 +22,6 @@ primary_region = "ams"
   memory_mb = 512
 
 [mounts]
-  source="playground_data"
-  destination="/data"
+  source = "playground_litefs"
+  destination = "/var/lib/litefs"
+

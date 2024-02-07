@@ -12,6 +12,7 @@ Features:
 - [x] Client side session management
 - [x] Prod: embed client js app in rust binary 
 - [x] Deployment (fly.io)
+- [x] [litefs](https://fly.io/docs/litefs/) for distributed SQLite 
 
 ## Development
 
@@ -54,14 +55,17 @@ cargo build --release
 The resulting binary is ~8MB.
 
 ### fly.io
+This deployment uses [litefs](https://fly.io/docs/litefs).
 
-#### volume
+#### volume and litefs
 Create volume initially:
 ```bash
 fly launch --no-deploy
 
+fly consul attach
+
 # if no volume created during initial launch:
-# fly volumes create playground_data --region ams --size 3
+fly volumes create playground_litefs --region ams --size 3
 ```
 
 #### envs
@@ -71,7 +75,8 @@ fly secrets set \
 RP_ID=axum-solid-playground.fly.dev \
 RP_ORIGIN=https://axum-solid-playground.fly.dev \
 RP_NAME=axum-solid-playground \
-DATABASE_URL=sqlite:///data/sqlite.db
+LITEFS_CLOUD_TOKEN=yoursecrettoken \
+DATABASE_URL=sqlite:///litefs/playground.db
 ```
 
 #### deploy
