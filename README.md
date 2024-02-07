@@ -10,6 +10,7 @@ Features:
 - [x] Discoverable passkeys for authentication with [webauthn-rs](https://github.com/kanidm/webauthn-rs/blob/d278c56adfa39a0723c79bdcd461644194bc5138/webauthn-rs/src/lib.rs#L1270)
 - [x] Database integration (custom [tokio-rusqlite store](./server/src/rusqlite_session_store.rs) for tower-sessions)
 - [x] Client side session management
+- [x] Prod: embed client js app in rust binary 
 - [ ] Deployment
 
 ## Development
@@ -30,6 +31,14 @@ cargo watch -x "run --features dev_proxy"
 ```
 
 Open [http://localhost:3000](http://localhost:3000) to view it in the browser.
+
+## Prod
+[axum-embed](https://github.com/informationsea/axum-embed) is used to embed the frontend into the backend.
+
+```bash
+npm run build
+cargo run --release
+```
 
 ## Docs
 

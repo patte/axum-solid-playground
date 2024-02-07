@@ -2,6 +2,8 @@ use axum::{
     extract::Extension, http::StatusCode, response::IntoResponse, routing::get, routing::post,
     Router,
 };
+use axum_embed::ServeEmbed;
+use rust_embed::RustEmbed;
 use std::{net::SocketAddr, str::FromStr};
 use tower_cookies::CookieManagerLayer;
 use tower_sessions::{
@@ -33,6 +35,10 @@ use dotenv::dotenv;
 use std::env;
 
 mod rusqlite_session_store;
+
+#[derive(RustEmbed, Clone)]
+#[folder = "../client/dist/"]
+struct ClientDist;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -84,19 +90,21 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     #[cfg(not(feature = "dev_proxy"))]
     {
+        let serve_client = ServeEmbed::<ClientDist>::new();
+        let router = Router::new().nest_service("/", serve_client).merge(router);
         info!("Starting server on {addr}");
         axum::serve(listener, router).await.unwrap();
     }
 
     #[cfg(feature = "dev_proxy")]
     {
-        info!("Starting dev server on {addr}");
         let client = proxy::get_client();
         let router = Router::new()
             .route("/", get(proxy::proxy_handler))
             .route("/*key", get(proxy::proxy_handler))
             .merge(router)
             .with_state(client);
+        info!("Starting dev server on {addr}");
         axum::serve(listener, router).await.unwrap();
     }
 
