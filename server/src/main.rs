@@ -3,6 +3,7 @@ use axum::{
     Router,
 };
 use std::{net::SocketAddr, str::FromStr};
+use tower_cookies::{CookieManagerLayer, Key};
 use tower_sessions::{
     cookie::{time::Duration, SameSite},
     Expiry, MemoryStore, SessionManagerLayer,
@@ -10,7 +11,9 @@ use tower_sessions::{
 
 mod error;
 
-use crate::auth::{finish_authentication, finish_register, start_authentication, start_register};
+use crate::auth::{
+    finish_authentication, finish_register, get_me, signout, start_authentication, start_register,
+};
 use crate::state::AppState;
 
 // enables !info, !warn, etc.
@@ -50,6 +53,12 @@ async fn main() {
         .with_secure(env::var("SESSION_SECURE").unwrap_or("true".to_string()) != "false")
         .with_expiry(Expiry::OnInactivity(Duration::seconds(360)));
 
+    auth::set_key(Key::from(
+        env::var("SESSION_KEY")
+            .expect("SESSION_KEY environment variable not set")
+            .as_bytes(),
+    ));
+
     // listen
     let addr = SocketAddr::from_str(&env::var("LISTEN_HOST_PORT").unwrap())
         .expect("Invalid LISTEN_HOST_PORT environment variable");
@@ -61,17 +70,22 @@ async fn main() {
         .route("/authenticate_start", post(start_authentication))
         .route("/authenticate_finish", post(finish_authentication))
         .route("/health", get(|| async { "OK" }))
-        .layer(Extension(app_state.await))
+        .route("/me", get(get_me))
+        .route("/signout", post(signout))
+        .layer(Extension(app_state))
         .layer(session_layer)
+        .layer(CookieManagerLayer::new())
         .fallback(handler_404);
 
     #[cfg(not(feature = "dev_proxy"))]
     {
+        info!("Starting server on {addr}");
         axum::serve(listener, router).await.unwrap();
     }
 
     #[cfg(feature = "dev_proxy")]
     {
+        info!("Starting dev server on {addr}");
         let client = proxy::get_client();
         let router = Router::new()
             .route("/", get(proxy::proxy_handler))

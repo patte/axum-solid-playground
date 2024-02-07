@@ -1,11 +1,15 @@
-use std::sync::Arc;
-
 use crate::error::WebauthnError;
 use crate::state::AppState;
 use axum::{
     extract::{Extension, Json, Path},
+    http::StatusCode,
     response::IntoResponse,
 };
+use cookie::{
+    time::{Duration, OffsetDateTime},
+    Expiration,
+};
+use once_cell::sync::OnceCell;
 use tower_sessions::Session;
 
 use webauthn_rs::prelude::*;
@@ -120,6 +124,7 @@ pub async fn start_register(
 pub async fn finish_register(
     Extension(app_state): Extension<AppState>,
     session: Session,
+    cookies: Cookies,
     Json(reg): Json<RegisterPublicKeyCredential>,
 ) -> Result<impl IntoResponse, WebauthnError> {
     let (new_user, reg_state): (User, PasskeyRegistration) = session
@@ -163,7 +168,8 @@ pub async fn finish_register(
 
             info!("finish register successful!");
 
-            // TODO: set session authenticated
+            // set session authenticated
+            set_me_authenticated(new_user.clone(), cookies);
 
             Json(new_user)
         }
@@ -245,6 +251,7 @@ pub async fn start_authentication(
 pub async fn finish_authentication(
     Extension(app_state): Extension<AppState>,
     session: Session,
+    cookies: Cookies,
     Json(auth_input): Json<PublicKeyCredential>,
 ) -> Result<impl IntoResponse, WebauthnError> {
     let auth_state: DiscoverableAuthentication = session
@@ -345,7 +352,8 @@ pub async fn finish_authentication(
                     WebauthnError::GenericDatabaseError
                 })?;
 
-            // TODO: set session authenticated
+            // set session authenticated
+            set_me_authenticated(user.clone(), cookies);
 
             Json(user)
         }
@@ -357,3 +365,79 @@ pub async fn finish_authentication(
     info!("Authentication Successful!");
     Ok(res)
 }
+
+use tower_cookies::{Cookie, Cookies, Key};
+static COOKIE_KEY: OnceCell<Key> = OnceCell::new();
+pub fn set_key(key: Key) {
+    COOKIE_KEY.set(key).ok();
+}
+
+const COOKIE_NAME: &str = "authenticated_user";
+const COOKIE_NAME_JS: &str = "authenticated_user_js";
+
+// sets two cookies
+// one for consumtion on the server (encrypted, signed, http only)
+//   decides in middlewares which user is authenticated
+// one for the client side js app (plaintext, http only = false)
+//   used to hydrate session state on first render
+//   only informative to client
+pub fn set_me_authenticated(user: User, cookies: Cookies) -> Result<(), WebauthnError> {
+    let key = COOKIE_KEY.get().unwrap();
+    let expires = OffsetDateTime::now_utc() + Duration::minutes(60);
+    let user_stringified = serde_json::to_string(&user).map_err(|_| WebauthnError::Unknown)?;
+    // this is the defining cookie server side
+    // not readable by js
+    cookies.private(key).add(
+        Cookie::build((COOKIE_NAME, user_stringified.clone()))
+            //.expires(Expiration::Session)
+            .expires(expires)
+            .http_only(true)
+            //.secure(true)
+            .build(),
+    );
+    // informative cookie for the client app
+    // readable by the javascript app
+    cookies.add(
+        Cookie::build((COOKIE_NAME_JS, user_stringified))
+            .expires(expires)
+            .http_only(false)
+            //.secure(true)
+            .build(),
+    );
+    Ok(())
+}
+
+pub async fn signout(cookies: Cookies) -> Result<(), StatusCode> {
+    let key = COOKIE_KEY.get().unwrap();
+    cookies.private(key).remove(Cookie::new(COOKIE_NAME, ""));
+    cookies.remove(Cookie::new(COOKIE_NAME_JS, ""));
+    Ok(())
+}
+
+pub fn me(cookies: Cookies) -> Option<User> {
+    let key = COOKIE_KEY.get().unwrap();
+    cookies
+        .private(key)
+        .get(COOKIE_NAME)
+        .and_then(|c| c.value().parse().ok())
+        .and_then(|user: String| serde_json::from_str(&user).ok())
+}
+
+pub async fn get_me(cookies: Cookies) -> Result<impl IntoResponse, StatusCode> {
+    let user = me(cookies);
+    match user {
+        Some(user) => Ok(Json(user)),
+        None => Err(StatusCode::UNAUTHORIZED),
+    }
+}
+
+// code to get cookie in client side js
+// ```js
+/*
+document.cookie
+    .split(';')
+    .map(v => v.trim())
+    .find(v => v.startsWith('authenticated_user'))
+    .split('=')[2]
+*/
+// ```

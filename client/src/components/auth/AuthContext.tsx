@@ -10,21 +10,50 @@ export const AuthContext = createContext<{
 
 const [me, setMe] = createSignal<User | null>(null);
 
-export const authContext = {
-  me: () => me(),
-  signIn: (user: User) => {
-    setMe(user);
-  },
-  signOut: () => {
-    setMe(null);
-  },
-  isSignedIn: () => !!me(),
-};
-
 export const useAuth = () => useContext(AuthContext)!;
 
-export const AuthProvider = (props: any) => (
-  <AuthContext.Provider value={authContext}>
-    {props.children}
-  </AuthContext.Provider>
-);
+// auth.rs sets the informative cookie for the client
+//
+function get_me_from_cookie() {
+  const cookie_user = document?.cookie
+    ? document.cookie
+        ?.split(";")
+        .map((v) => v.trim())
+        .find((v) => v.startsWith("authenticated_user_js"))
+        ?.split("=")[1]
+    : null;
+  let me_from_cookie;
+  if (cookie_user) {
+    try {
+      me_from_cookie = JSON.parse(cookie_user);
+    } catch (e) {
+      me_from_cookie = null;
+    }
+  }
+  return me_from_cookie;
+}
+
+export const AuthProvider = (props: any) => {
+  const me_from_cookie = get_me_from_cookie();
+  if (!me() && me_from_cookie) {
+    setMe(me_from_cookie);
+  }
+  const authContext = {
+    me: () => me(),
+    signIn: (user: User) => {
+      setMe(user);
+    },
+    signOut: async () => {
+      fetch("/signout", {
+        method: "POST",
+      });
+      setMe(null);
+    },
+    isSignedIn: () => !!me(),
+  };
+  return (
+    <AuthContext.Provider value={authContext}>
+      {props.children}
+    </AuthContext.Provider>
+  );
+};
