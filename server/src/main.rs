@@ -3,10 +3,11 @@ use axum::{
     Router,
 };
 use std::{net::SocketAddr, str::FromStr};
-use tower_cookies::{CookieManagerLayer, Key};
+use tower_cookies::CookieManagerLayer;
 use tower_sessions::{
     cookie::{time::Duration, SameSite},
-    Expiry, MemoryStore, SessionManagerLayer,
+    session_store::ExpiredDeletion,
+    Expiry, SessionManagerLayer,
 };
 
 mod error;
@@ -31,8 +32,10 @@ mod proxy;
 use dotenv::dotenv;
 use std::env;
 
+mod rusqlite_session_store;
+
 #[tokio::main]
-async fn main() {
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // load env
     dotenv().ok();
 
@@ -44,20 +47,22 @@ async fn main() {
     tracing_subscriber::fmt::init();
 
     // initialize app state
-    let app_state = AppState::new();
+    let app_state = AppState::new().await;
 
-    let session_store = MemoryStore::default();
+    let session_store = rusqlite_session_store::RusqliteStore::new(app_state.db.conn.clone());
+    session_store.migrate().await.unwrap();
+
+    let deletion_task = tokio::task::spawn(
+        session_store
+            .clone()
+            .continuously_delete_expired(tokio::time::Duration::from_secs(50)),
+    );
+
     let session_layer = SessionManagerLayer::new(session_store)
         .with_name(&env::var("SESSION_NAME").unwrap_or("session".to_string()))
         .with_same_site(SameSite::Strict)
-        .with_secure(env::var("SESSION_SECURE").unwrap_or("true".to_string()) != "false")
-        .with_expiry(Expiry::OnInactivity(Duration::seconds(360)));
-
-    auth::set_key(Key::from(
-        env::var("SESSION_KEY")
-            .expect("SESSION_KEY environment variable not set")
-            .as_bytes(),
-    ));
+        .with_secure(env::var("COOKIES_SECURE").unwrap_or("true".to_string()) != "false")
+        .with_expiry(Expiry::OnInactivity(Duration::hours(24)));
 
     // listen
     let addr = SocketAddr::from_str(&env::var("LISTEN_HOST_PORT").unwrap())
@@ -96,6 +101,10 @@ async fn main() {
     }
 
     info!("listening on {addr}");
+
+    deletion_task.await??;
+
+    Ok(())
 }
 
 async fn handler_404() -> impl IntoResponse {

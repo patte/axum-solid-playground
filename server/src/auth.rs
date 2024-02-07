@@ -1,3 +1,5 @@
+use std::env;
+
 use crate::error::WebauthnError;
 use crate::state::AppState;
 use axum::{
@@ -5,11 +7,8 @@ use axum::{
     http::StatusCode,
     response::IntoResponse,
 };
-use cookie::{
-    time::{Duration, OffsetDateTime},
-    Expiration,
-};
-use once_cell::sync::OnceCell;
+use cookie::{Cookie, SameSite};
+use tower_cookies::Cookies;
 use tower_sessions::Session;
 
 use webauthn_rs::prelude::*;
@@ -169,7 +168,7 @@ pub async fn finish_register(
             info!("finish register successful!");
 
             // set session authenticated
-            set_me_authenticated(new_user.clone(), cookies);
+            set_me_authenticated(new_user.clone(), session, cookies).await?;
 
             Json(new_user)
         }
@@ -278,7 +277,7 @@ pub async fn finish_authentication(
         Ok(creds) => creds,
         Err(e) => {
             info!("Error in finish_authentication: {:?}", e);
-            return Err(WebauthnError::InvalidUserUniqueId);
+            return Err(WebauthnError::UserAndCredentialDontMatch);
         }
     };
 
@@ -353,7 +352,7 @@ pub async fn finish_authentication(
                 })?;
 
             // set session authenticated
-            set_me_authenticated(user.clone(), cookies);
+            set_me_authenticated(user.clone(), session, cookies).await?;
 
             Json(user)
         }
@@ -366,65 +365,61 @@ pub async fn finish_authentication(
     Ok(res)
 }
 
-use tower_cookies::{Cookie, Cookies, Key};
-static COOKIE_KEY: OnceCell<Key> = OnceCell::new();
-pub fn set_key(key: Key) {
-    COOKIE_KEY.set(key).ok();
-}
-
-const COOKIE_NAME: &str = "authenticated_user";
 const COOKIE_NAME_JS: &str = "authenticated_user_js";
 
-// sets two cookies
-// one for consumtion on the server (encrypted, signed, http only)
-//   decides in middlewares which user is authenticated
-// one for the client side js app (plaintext, http only = false)
+// remembers the user in the server side session and a cookie for the client
+// the session is used server side
+// the cookie for the client side js app (plaintext, http only = false)
 //   used to hydrate session state on first render
 //   only informative to client
-pub fn set_me_authenticated(user: User, cookies: Cookies) -> Result<(), WebauthnError> {
-    let key = COOKIE_KEY.get().unwrap();
-    let expires = OffsetDateTime::now_utc() + Duration::minutes(60);
-    let user_stringified = serde_json::to_string(&user).map_err(|_| WebauthnError::Unknown)?;
-    // this is the defining cookie server side
-    // not readable by js
-    cookies.private(key).add(
-        Cookie::build((COOKIE_NAME, user_stringified.clone()))
-            //.expires(Expiration::Session)
-            .expires(expires)
-            .http_only(true)
-            //.secure(true)
-            .build(),
-    );
+pub async fn set_me_authenticated(
+    user: User,
+    session: Session,
+    cookies: Cookies,
+) -> Result<(), WebauthnError> {
+    session
+        .insert("authenticated_user", user.clone())
+        .await
+        .map_err(|e| {
+            error!("Failed to insert authenticated_user into session: {:?}", e);
+            WebauthnError::CorruptSession
+        })?;
+
     // informative cookie for the client app
     // readable by the javascript app
+    let user_stringified = serde_json::to_string(&user).map_err(|_| WebauthnError::Unknown)?;
     cookies.add(
         Cookie::build((COOKIE_NAME_JS, user_stringified))
-            .expires(expires)
+            .expires(session.expiry_date())
             .http_only(false)
-            //.secure(true)
+            .same_site(SameSite::Strict)
+            .secure(env::var("COOKIES_SECURE").unwrap_or("true".to_string()) != "false")
             .build(),
     );
     Ok(())
 }
 
-pub async fn signout(cookies: Cookies) -> Result<(), StatusCode> {
-    let key = COOKIE_KEY.get().unwrap();
-    cookies.private(key).remove(Cookie::new(COOKIE_NAME, ""));
+pub async fn signout(session: Session, cookies: Cookies) -> Result<(), StatusCode> {
+    session.flush().await.map_err(|e| {
+        error!("Failed to remove authenticated_user from session: {:?}", e);
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
     cookies.remove(Cookie::new(COOKIE_NAME_JS, ""));
     Ok(())
 }
 
-pub fn me(cookies: Cookies) -> Option<User> {
-    let key = COOKIE_KEY.get().unwrap();
-    cookies
-        .private(key)
-        .get(COOKIE_NAME)
-        .and_then(|c| c.value().parse().ok())
-        .and_then(|user: String| serde_json::from_str(&user).ok())
+pub async fn me(session: Session) -> Option<User> {
+    session
+        .get::<User>("authenticated_user")
+        .await
+        .unwrap_or_else(|e| {
+            error!("Failed to get authenticated_user from session: {:?}", e);
+            None
+        })
 }
 
-pub async fn get_me(cookies: Cookies) -> Result<impl IntoResponse, StatusCode> {
-    let user = me(cookies);
+pub async fn get_me(session: Session) -> Result<impl IntoResponse, StatusCode> {
+    let user = me(session).await;
     match user {
         Some(user) => Ok(Json(user)),
         None => Err(StatusCode::UNAUTHORIZED),

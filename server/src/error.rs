@@ -12,14 +12,12 @@ pub enum WebauthnError {
     CorruptSession,
     #[error("User Not Found")]
     UserNotFound,
-    #[error("User Has No Credentials")]
-    UserHasNoCredentials,
     #[error("Deserialising Session failed: {0}")]
     InvalidSessionState(#[from] tower_sessions::session::Error),
     #[error("Username must be between 3 and 24 characters")]
     InvalidUsername,
-    #[error("Invalid UserID supplied during authentication")]
-    InvalidUserUniqueId,
+    #[error("UserID and credentialID don't match")]
+    UserAndCredentialDontMatch,
     #[error("Username already exists. Please login or choose a different username.")]
     UsernameAlreadyExists,
     #[error("Database error! Sorry! Please try again later.")]
@@ -31,10 +29,9 @@ impl IntoResponse for WebauthnError {
             WebauthnError::CorruptSession => "Corrupt Session",
             WebauthnError::UserNotFound => "User Not Found",
             WebauthnError::Unknown => "Unknown Error",
-            WebauthnError::UserHasNoCredentials => "User Has No Credentials",
             WebauthnError::InvalidSessionState(_) => "Deserialising Session failed",
             WebauthnError::InvalidUsername => "Username must be between 3 and 24 characters",
-            WebauthnError::InvalidUserUniqueId => "Invalid UserID supplied during authentication",
+            WebauthnError::UserAndCredentialDontMatch => "UserID and credentialID don't match",
             WebauthnError::UsernameAlreadyExists => {
                 "Username already exists. Please sign in or choose a different username."
             }
