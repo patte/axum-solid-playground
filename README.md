@@ -15,6 +15,7 @@ Features:
 - [x] Deployment (fly.io)
 - [x] [litefs](https://fly.io/docs/litefs/) for distributed SQLite
 - [ ] PR tower-sessions-stores
+- [ ] security headers
 - [ ] register additional passkeys to user after first, signout all my sessions
 - [ ] ui: passkey details, server info, debug network
 - [ ] github action
@@ -28,10 +29,12 @@ Playground to learn:
 - how to combine a rust axum backend with a solidJS frontend?
 - how to authenticate users with discoverable passkeys? and what's the user experience in different browsers?
 - how to manage a session on the server with persistence and sync to the js client (on first render) (MVP)? - async sqlite in rust, yes please #no_orm?
-- wtf is litefs and how to abuse it?
+- how cool is litefs and how to (ab)use it?
 - how to have fun, go light and fast, with a small (<10MB) single standalone binary, that uses <100MB RAM idle.
 - ... all PRs welcome 💓
 - ... and all issues too 🤗
+
+
 
 ## Development
 
