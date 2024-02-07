@@ -6,7 +6,7 @@ import { Card } from "~/components/ui/card";
 function Welcome() {
   const { me } = useAuth();
   return (
-    <div class="min-h-screen">
+    <div>
       <div class="flex items-center justify-center">
         <h1 class="text-3xl font-bold">Hello {me()?.username}</h1>
       </div>
