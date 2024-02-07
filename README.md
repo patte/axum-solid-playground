@@ -31,9 +31,9 @@ cargo watch -x "run --features dev_proxy"
 
 Open [http://localhost:3000](http://localhost:3000) to view it in the browser.
 
-### Notes
+## Docs
 
-#### Auth
+### Auth
 SignUp and SignIn are implemented with passkeys with [webauthn-rs](https://github.com/kanidm/webauthn-rs).
 
 [tower-sessions](https://github.com/maxcountryman/tower-sessions/tree/52983f026f0c805598e68f82647a0865b29a60bd) with a custom [RusqliteStore](./server/src/rusqlite_session_store.rs) is used for session management.
@@ -42,8 +42,10 @@ The session is used for the passkey dance as well as to remember the authenticat
 A cookie `authenticated_user_js` (http_only=false) is set on successful signin so that the [js frontend knows](./client/src/components/auth/AuthContext.tsx) the user is authenticated and can render appropriatly on first load.
 This cookie is only informative for the client and not used to determine if the user is authenticated on the server.
 
+The session have a fixed lifetime of 24 hours and are not rolled over on use.
 
-#### Browsers
+
+### Browsers
 
 Chrome (local) passkeys can be managed at [chrome://settings/passkeys](chrome://settings/passkeys).
 
