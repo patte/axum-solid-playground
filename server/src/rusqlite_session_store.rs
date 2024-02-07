@@ -149,7 +149,7 @@ impl SessionStore for RusqliteStore {
             RusqliteStoreError::SqlError(e).into()
         })
         .map(|_| {
-            info!("Session saved: {:?}", record);
+            //info!("Session saved: {:?}", record);
             ()
         })
     }
