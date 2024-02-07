@@ -33,6 +33,13 @@ Playground to learn:
 - ... all PRs welcome 💓
 - ... and all issues too 🤗
 
+> <img width="475" alt="Screenshot 2024-02-07 at 23 10 20" src="https://github.com/patte/axum-solid-playground/assets/3500621/86e3834a-45e0-4bb4-a4fc-28d0cd7a4682"></br>
+> -GitHub Copilot
+> <details><summary>actually...</summary>
+> <img width="882" alt="Screenshot 2024-02-07 at 23 11 58" src="https://github.com/patte/axum-solid-playground/assets/3500621/76fd47aa-2059-42a9-bfb0-6b3c9f79715a">
+> </details>
+
+
 ## Development
 
 Copy `.env.example` to `.env`:
