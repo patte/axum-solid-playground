@@ -42,6 +42,7 @@ mod proxy;
 use dotenv::dotenv;
 use std::env;
 
+mod chat;
 mod rusqlite_session_store;
 
 #[cfg(not(feature = "dev_proxy"))]
@@ -93,6 +94,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/me", get(get_me_handler))
         .route("/debug", get(get_debug))
         .route("/signout", post(signout))
+        .route("/chat", get(chat::websocket_handler))
         .layer(Extension(app_state))
         .layer(session_layer)
         .layer(CookieManagerLayer::new())

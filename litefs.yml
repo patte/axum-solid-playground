@@ -26,6 +26,9 @@ proxy:
   passthrough:
     - "*.ico"
     - "*.png"
+    - "/assets/*"
+  always-forward:
+    - "/chat"
   debug: true
 
 # This section defines a list of commands to run after LiteFS has connected

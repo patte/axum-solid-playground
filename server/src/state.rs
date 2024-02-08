@@ -1,5 +1,7 @@
+use std::collections::HashSet;
 use std::env;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
+use tokio::sync::broadcast;
 use webauthn_rs::prelude::*;
 
 /*
@@ -15,6 +17,11 @@ pub struct AppState {
     // lifetimes.
     pub webauthn: Arc<Webauthn>,
     pub db: DB,
+    // Channel used to send messages to all connected clients.
+    // for chat example
+    pub tx: broadcast::Sender<String>,
+    pub connected_usernames: Arc<Mutex<HashSet<String>>>,
+    pub recent_messages: Arc<Mutex<Vec<String>>>,
 }
 
 impl AppState {
@@ -41,6 +48,15 @@ impl AppState {
         // db
         let db = DB::new().await;
 
-        AppState { webauthn, db }
+        let (tx, _rx) = broadcast::channel(100);
+        let user_set = Arc::new(Mutex::new(HashSet::new()));
+        let recent_messages = Arc::new(Mutex::new(Vec::new()));
+        AppState {
+            webauthn,
+            db,
+            tx,
+            connected_usernames: user_set,
+            recent_messages,
+        }
     }
 }
