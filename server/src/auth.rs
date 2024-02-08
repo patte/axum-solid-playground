@@ -408,7 +408,7 @@ pub async fn signout(session: Session, cookies: Cookies) -> Result<(), StatusCod
     Ok(())
 }
 
-pub async fn me(session: Session) -> Option<User> {
+pub async fn get_me(session: Session) -> Option<User> {
     session
         .get::<User>("authenticated_user")
         .await
@@ -418,8 +418,8 @@ pub async fn me(session: Session) -> Option<User> {
         })
 }
 
-pub async fn get_me(session: Session) -> Result<impl IntoResponse, StatusCode> {
-    let user = me(session).await;
+pub async fn get_me_handler(session: Session) -> Result<impl IntoResponse, StatusCode> {
+    let user = get_me(session).await;
     match user {
         Some(user) => Ok(Json(user)),
         None => Err(StatusCode::UNAUTHORIZED),

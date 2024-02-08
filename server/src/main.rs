@@ -22,7 +22,8 @@ use tower_sessions::{
 mod error;
 
 use crate::auth::{
-    finish_authentication, finish_register, get_me, signout, start_authentication, start_register,
+    finish_authentication, finish_register, get_me_handler, signout, start_authentication,
+    start_register,
 };
 use crate::state::AppState;
 
@@ -89,7 +90,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/authenticate_start", post(start_authentication))
         .route("/authenticate_finish", post(finish_authentication))
         .route("/health", get(|| async { "OK" }))
-        .route("/me", get(get_me))
+        .route("/me", get(get_me_handler))
         .route("/debug", get(get_debug))
         .route("/signout", post(signout))
         .layer(Extension(app_state))
