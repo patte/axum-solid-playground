@@ -14,7 +14,8 @@ Features:
 - [ ] Client side session: detect deleted on server
 - [x] Deployment (fly.io)
 - [x] [litefs](https://fly.io/docs/litefs/) for distributed SQLite
-- [ ] PR tower-sessions-stores
+- [x] PR [maxcountryman/tower-sessions-stores#6](https://github.com/maxcountryman/tower-sessions-stores/pull/6)
+- [x] publish crate [tower-sessions-rusqlite-store](https://github.com/patte/tower-sessions-rusqlite-store)
 - [ ] security headers
 - [ ] register additional passkeys to user after first, signout all my sessions
 - [ ] ui: passkey details, server info, debug network

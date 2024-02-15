@@ -18,6 +18,7 @@ use tower_sessions::{
     session_store::ExpiredDeletion,
     Expiry, SessionManagerLayer,
 };
+use tower_sessions_rusqlite_store::RusqliteStore;
 
 mod error;
 
@@ -42,8 +43,6 @@ mod proxy;
 use dotenv::dotenv;
 use std::env;
 
-mod rusqlite_session_store;
-
 #[cfg(not(feature = "dev_proxy"))]
 #[derive(RustEmbed, Clone)]
 #[folder = "../client/dist/"]
@@ -64,7 +63,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // initialize app state
     let app_state = AppState::new().await;
 
-    let session_store = rusqlite_session_store::RusqliteStore::new(app_state.db.conn.clone());
+    let session_store = RusqliteStore::new(app_state.db.conn.clone());
     session_store.migrate().await.unwrap();
 
     let deletion_task = tokio::task::spawn(
