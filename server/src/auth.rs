@@ -1,7 +1,7 @@
 use std::env;
 
-use crate::error::WebauthnError;
 use crate::state::AppState;
+use crate::{error::WebauthnError, extractors::get_user_agent_string_short};
 use axum::{
     extract::{Extension, Json, Path},
     http::StatusCode,
@@ -14,6 +14,8 @@ use tower_sessions::Session;
 use webauthn_rs::prelude::*;
 
 use crate::queries::User;
+
+use crate::extractors::ExtractUserAgent;
 
 // Webauthn RS auth handlers.
 // adapted for "conditional-ui" (no username required for authentication) based on the example here:
@@ -56,6 +58,8 @@ pub async fn start_register(
     Extension(app_state): Extension<AppState>,
     session: Session,
     Path(username): Path<String>,
+    // error early if user_agent is missing or invalid
+    ExtractUserAgent(_user_agent): ExtractUserAgent,
 ) -> Result<impl IntoResponse, WebauthnError> {
     info!("Start register");
 
@@ -124,8 +128,12 @@ pub async fn finish_register(
     Extension(app_state): Extension<AppState>,
     session: Session,
     cookies: Cookies,
+    ExtractUserAgent(user_agent): ExtractUserAgent,
     Json(reg): Json<RegisterPublicKeyCredential>,
 ) -> Result<impl IntoResponse, WebauthnError> {
+    let ua_short = get_user_agent_string_short(&user_agent, &app_state.ua_parser);
+    println!("short ua: {}", ua_short);
+
     let (new_user, reg_state): (User, PasskeyRegistration) = session
         .get("reg_state")
         .await
@@ -155,8 +163,13 @@ pub async fn finish_register(
                 .call({
                     let new_user = new_user.clone();
                     move |conn| {
-                        crate::queries::insert_user_and_passkey(conn, new_user, sk.clone())
-                            .map_err(|e| e.into())
+                        crate::queries::insert_user_and_passkey(
+                            conn,
+                            new_user,
+                            sk.clone(),
+                            &ua_short,
+                        )
+                        .map_err(|e| e.into())
                     }
                 })
                 .await

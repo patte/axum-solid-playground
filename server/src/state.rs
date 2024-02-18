@@ -1,5 +1,6 @@
 use std::env;
 use std::sync::Arc;
+use uaparser::UserAgentParser;
 use webauthn_rs::prelude::*;
 
 /*
@@ -15,6 +16,7 @@ pub struct AppState {
     // lifetimes.
     pub webauthn: Arc<Webauthn>,
     pub db: DB,
+    pub ua_parser: Arc<UserAgentParser>,
 }
 
 impl AppState {
@@ -41,6 +43,16 @@ impl AppState {
         // db
         let db = DB::new().await;
 
-        AppState { webauthn, db }
+        // useragent parser
+        let parser = UserAgentParser::builder()
+            .with_unicode_support(false)
+            .build_from_yaml("./src/user_agents/regexes.yaml")
+            .expect("Parser creation failed");
+
+        AppState {
+            webauthn,
+            db,
+            ua_parser: Arc::new(parser),
+        }
     }
 }

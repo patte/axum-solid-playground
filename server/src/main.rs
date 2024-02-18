@@ -34,6 +34,7 @@ extern crate tracing;
 
 mod auth;
 mod db;
+mod extractors;
 mod queries;
 mod state;
 

@@ -31,21 +31,35 @@ pub fn insert_user(conn: &Connection, user: User) -> Result<usize> {
     )
 }
 
-pub fn insert_authenticator(conn: &Connection, user_id: Uuid, passkey: Passkey) -> Result<usize> {
+pub fn insert_authenticator(
+    conn: &Connection,
+    user_id: Uuid,
+    passkey: Passkey,
+    user_agent_short: &str,
+) -> Result<usize> {
     conn.execute(
         "insert into
-        authenticators (user_id, passkey)
-        values (?1, ?2)",
-        params![user_id, serde_json::to_string(&passkey).unwrap()],
+        authenticators (user_id, passkey, user_agent_short)
+        values (?1, ?2, ?3)",
+        params![
+            user_id,
+            serde_json::to_string(&passkey).unwrap(),
+            user_agent_short
+        ],
     )
 }
 
-pub fn insert_user_and_passkey(conn: &mut Connection, user: User, passkey: Passkey) -> Result<()> {
+pub fn insert_user_and_passkey(
+    conn: &mut Connection,
+    user: User,
+    passkey: Passkey,
+    user_agent_short: &str,
+) -> Result<()> {
     let tx = conn.transaction()?;
 
     insert_user(&tx, user.clone())?;
 
-    insert_authenticator(&tx, user.id, passkey)?;
+    insert_authenticator(&tx, user.id, passkey, user_agent_short)?;
 
     tx.commit()?;
     Ok(())
