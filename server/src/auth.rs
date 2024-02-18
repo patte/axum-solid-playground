@@ -132,7 +132,6 @@ pub async fn finish_register(
     Json(reg): Json<RegisterPublicKeyCredential>,
 ) -> Result<impl IntoResponse, WebauthnError> {
     let ua_short = get_user_agent_string_short(&user_agent, &app_state.ua_parser);
-    println!("short ua: {}", ua_short);
 
     let (new_user, reg_state): (User, PasskeyRegistration) = session
         .get("reg_state")
@@ -449,3 +448,26 @@ document.cookie
     .split('=')[2]
 */
 // ```
+
+pub async fn get_me_authenticators(
+    session: Session,
+    Extension(app_state): Extension<AppState>,
+) -> Result<impl IntoResponse, StatusCode> {
+    let user = get_me(session).await;
+    if let Some(user) = user {
+        let authenticators = app_state
+            .db
+            .conn
+            .call(move |conn| {
+                crate::queries::get_authenticators_for_user_id(conn, user.id).map_err(|e| e.into())
+            })
+            .await
+            .map_err(|e| {
+                error!("get_authenticators_for_user: {:?}", e);
+                StatusCode::INTERNAL_SERVER_ERROR
+            })?;
+        Ok(Json(authenticators))
+    } else {
+        Err(StatusCode::UNAUTHORIZED)
+    }
+}

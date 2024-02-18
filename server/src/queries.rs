@@ -1,3 +1,4 @@
+use chrono::{DateTime, Utc};
 use rusqlite::{params, Connection, Result};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -160,4 +161,39 @@ pub fn get_all_users(conn: &Connection) -> Result<Vec<User>> {
         })?
         .collect();
     users
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct Authenticator {
+    pub user_id: Uuid,
+    pub passkey: Passkey,
+    pub user_agent_short: String,
+    pub created_at: DateTime<Utc>,
+}
+
+pub fn get_authenticators_for_user_id(
+    conn: &Connection,
+    user_id: Uuid,
+) -> Result<Vec<Authenticator>> {
+    let mut stmt = conn.prepare(
+        "
+        select user_id, passkey, user_agent_short, created_at
+        from authenticators
+        where user_id = ?1",
+    )?;
+    let authenticators = stmt
+        .query_map(params![user_id], |row| {
+            let passkey_string: String = row.get(1)?;
+            let created_at_string: String = row.get(3)?;
+            Ok(Authenticator {
+                user_id: row.get(0)?,
+                passkey: serde_json::from_str(&passkey_string).unwrap(),
+                user_agent_short: row.get(2)?,
+                created_at: DateTime::parse_from_rfc3339(&created_at_string)
+                    .unwrap()
+                    .to_utc(),
+            })
+        })?
+        .collect();
+    authenticators
 }

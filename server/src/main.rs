@@ -23,8 +23,8 @@ use tower_sessions_rusqlite_store::RusqliteStore;
 mod error;
 
 use crate::auth::{
-    finish_authentication, finish_register, get_me_handler, signout, start_authentication,
-    start_register,
+    finish_authentication, finish_register, get_me_authenticators, get_me_handler, signout,
+    start_authentication, start_register,
 };
 use crate::state::AppState;
 
@@ -91,6 +91,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/authenticate_finish", post(finish_authentication))
         .route("/health", get(|| async { "OK" }))
         .route("/me", get(get_me_handler))
+        .route("/me/authenticators", get(get_me_authenticators))
         .route("/debug", get(get_debug))
         .route("/signout", post(signout))
         .layer(Extension(app_state))
