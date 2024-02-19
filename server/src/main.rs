@@ -1,6 +1,7 @@
 use axum::{
     extract::Extension,
     http::StatusCode,
+    middleware,
     response::IntoResponse,
     routing::{get, post},
     Router,
@@ -23,7 +24,7 @@ use tower_sessions_rusqlite_store::RusqliteStore;
 mod error;
 
 use crate::auth::{
-    finish_authentication, finish_register, get_me_authenticators, get_me_handler, signout,
+    finish_authentication, finish_register, get_me, get_my_authenticators, signout,
     start_authentication, start_register,
 };
 use crate::state::AppState;
@@ -34,9 +35,11 @@ extern crate tracing;
 
 mod auth;
 mod db;
-mod extractors;
 mod queries;
 mod state;
+mod ua {
+    pub mod user_agent;
+}
 
 #[cfg(feature = "dev_proxy")]
 mod proxy;
@@ -73,11 +76,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             .continuously_delete_expired(tokio::time::Duration::from_secs(50)),
     );
 
+    // expiry is rolled on requests, see roll_expiry_mw
     let session_layer = SessionManagerLayer::new(session_store)
         .with_name(&env::var("SESSION_NAME").unwrap_or("session".to_string()))
         .with_same_site(SameSite::Strict)
         .with_secure(env::var("COOKIES_SECURE").unwrap_or("true".to_string()) != "false")
-        .with_expiry(Expiry::OnInactivity(Duration::hours(24)));
+        .with_expiry(Expiry::OnInactivity(Duration::hours(1)));
 
     // listen
     let addr = SocketAddr::from_str(&env::var("LISTEN_HOST_PORT").unwrap())
@@ -85,24 +89,32 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
 
     let router = Router::new()
+        .route("/health", get(|| async { "OK" }))
+        .route("/me", get(get_me))
+        .route("/me/authenticators", get(get_my_authenticators))
+        .route("/debug", get(get_debug))
+        .route_layer(middleware::from_fn(auth::roll_expiry_mw))
+        // ⬇️ these routes don't have the middleware ⬆️ applied
         .route("/register_start/:username", post(start_register))
         .route("/register_finish", post(finish_register))
         .route("/authenticate_start", post(start_authentication))
         .route("/authenticate_finish", post(finish_authentication))
-        .route("/health", get(|| async { "OK" }))
-        .route("/me", get(get_me_handler))
-        .route("/me/authenticators", get(get_me_authenticators))
-        .route("/debug", get(get_debug))
         .route("/signout", post(signout))
         .layer(Extension(app_state))
-        .layer(session_layer)
+        .layer(session_layer.clone())
         .layer(CookieManagerLayer::new())
         .fallback(handler_404);
 
     #[cfg(not(feature = "dev_proxy"))]
     {
         let serve_client = ServeEmbed::<ClientDist>::new();
-        let router = Router::new().nest_service("/", serve_client).merge(router);
+        let router = Router::new()
+            .nest_service("/", serve_client)
+            .layer(middleware::from_fn(auth::roll_expiry_mw))
+            // these layers need to be repeted, roll_expiry_mw needs them
+            .layer(session_layer.clone())
+            .layer(CookieManagerLayer::new())
+            .merge(router);
         info!("Starting server on {addr}");
         axum::serve(listener, router).await.unwrap();
     }
@@ -112,7 +124,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         let client = proxy::get_client();
         let router = Router::new()
             .route("/", get(proxy::proxy_handler))
+            .route_layer(middleware::from_fn(auth::roll_expiry_mw))
             .route("/*key", get(proxy::proxy_handler))
+            // these layers need to be repeted, roll_expiry_mw needs them
+            .layer(session_layer.clone())
+            .layer(CookieManagerLayer::new())
             .merge(router)
             .with_state(client);
         info!("Starting dev server on {addr}");

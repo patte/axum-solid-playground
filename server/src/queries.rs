@@ -10,15 +10,16 @@ use webauthn_rs::prelude::Passkey;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct User {
-    //pub id: String,
     pub id: Uuid,
     pub username: String,
+    pub created_at: DateTime<Utc>,
 }
 impl User {
     pub fn new(username: String) -> Self {
         Self {
             id: Uuid::now_v7(),
             username,
+            created_at: Utc::now(),
         }
     }
 }
@@ -26,9 +27,9 @@ impl User {
 pub fn insert_user(conn: &Connection, user: User) -> Result<usize> {
     conn.execute(
         "insert into
-        users (id, username)
-        values (?1, ?2)",
-        params![user.id, user.username],
+        users (id, username, created_at)
+        values (?1, ?2, ?3)",
+        params![user.id, user.username, user.created_at.to_rfc3339()],
     )
 }
 
@@ -36,15 +37,17 @@ pub fn insert_authenticator(
     conn: &Connection,
     user_id: Uuid,
     passkey: Passkey,
+    created_at: DateTime<Utc>,
     user_agent_short: &str,
 ) -> Result<usize> {
     conn.execute(
         "insert into
-        authenticators (user_id, passkey, user_agent_short)
-        values (?1, ?2, ?3)",
+        authenticators (user_id, passkey, created_at, user_agent_short)
+        values (?1, ?2, ?3, ?4)",
         params![
             user_id,
             serde_json::to_string(&passkey).unwrap(),
+            created_at.to_rfc3339(),
             user_agent_short
         ],
     )
@@ -60,7 +63,7 @@ pub fn insert_user_and_passkey(
 
     insert_user(&tx, user.clone())?;
 
-    insert_authenticator(&tx, user.id, passkey, user_agent_short)?;
+    insert_authenticator(&tx, user.id, passkey, user.created_at, user_agent_short)?;
 
     tx.commit()?;
     Ok(())
@@ -136,14 +139,18 @@ pub fn update_passkey_for_user_and_passkey_id(
 pub fn get_user_by_id(conn: &Connection, id: Uuid) -> Result<User> {
     let mut stmt = conn.prepare(
         "
-        select id, username
+        select id, username, created_at
         from users
         where id = ?1",
     )?;
     let user = stmt.query_row(params![id], |row| {
+        let created_at_string: String = row.get(2)?;
         Ok(User {
             id: row.get(0)?,
             username: row.get(1)?,
+            created_at: DateTime::parse_from_rfc3339(&created_at_string)
+                .unwrap()
+                .to_utc(),
         })
     })?;
     Ok(user)
@@ -151,12 +158,16 @@ pub fn get_user_by_id(conn: &Connection, id: Uuid) -> Result<User> {
 
 #[allow(dead_code)]
 pub fn get_all_users(conn: &Connection) -> Result<Vec<User>> {
-    let mut stmt = conn.prepare("SELECT id, username FROM users")?;
+    let mut stmt = conn.prepare("SELECT id, username, created_at FROM users")?;
     let users = stmt
         .query_map([], |row| {
+            let created_at_string: String = row.get(2)?;
             Ok(User {
                 id: row.get(0)?,
                 username: row.get(1)?,
+                created_at: DateTime::parse_from_rfc3339(&created_at_string)
+                    .unwrap()
+                    .to_utc(),
             })
         })?
         .collect();

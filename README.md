@@ -4,23 +4,27 @@ Test your passkeys at: https://axum-solid-playground.fly.dev
 
 Features:
 - [x] Rust backend with [axum](https://github.com/tokio-rs/axum)
+- [x] Database integration: rusqlite
 - [x] [SolidJS](https://www.solidjs.com) frontend with [vite](https://vitejs.dev/)
 - [x] [solid-ui](https://www.solid-ui.com/) for UI components
 - [x] [Dev proxy](./server/src/proxy.rs) for frontend in backend
 - [x] Prod: embed client js dist in rust binary 
 - [x] Discoverable [passkeys](https://www.passkeys.io/technical-details) for authentication with [webauthn-rs](https://github.com/kanidm/webauthn-rs/blob/d278c56adfa39a0723c79bdcd461644194bc5138/webauthn-rs/src/lib.rs#L1270)
-- [x] Database integration (custom [tokio-rusqlite store](./server/src/rusqlite_session_store.rs) for tower-sessions) 
-- [x] Client side session management (barely)
-- [ ] Client side session: detect deleted on server
+- [ ] be: session management: [tower-sessions-rusqlite-store](https://github.com/patte/tower-sessions-rusqlite-store)
+- [x] be: roll expire of session on request (max every minute)
+- [x] be: session management: write informative cookie for fe
+- [x] fe: session management: [AuthContext](./client/src/components/auth/AuthContext.tsx)
+- [x] fe: session: detect expire and refresh ui
 - [x] Deployment (fly.io)
 - [x] [litefs](https://fly.io/docs/litefs/) for distributed SQLite
 - [x] PR [maxcountryman/tower-sessions-stores#6](https://github.com/maxcountryman/tower-sessions-stores/pull/6)
 - [x] publish crate [tower-sessions-rusqlite-store](https://github.com/patte/tower-sessions-rusqlite-store)
+- [x] [rspc](https://github.com/oscartbeaumont/rspc)? cool idea but 🚫 (no support for axum 0.7)[https://github.com/oscartbeaumont/httpz/blob/main/Cargo.toml#L50] and generally a big mess
+- [ ] typed api between server and client? GraphQL!
 - [ ] security headers
 - [ ] register additional passkeys to user after first, signout all my sessions
 - [ ] ui: passkey details, server info, debug network
 - [ ] github action
-- [ ] typed api between server and client? [rspc](https://github.com/oscartbeaumont/rspc)?
 - [ ] websockets?
 - [ ] distributed kv?
 - [ ] ssr?

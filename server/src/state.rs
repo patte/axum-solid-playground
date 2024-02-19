@@ -44,10 +44,7 @@ impl AppState {
         let db = DB::new().await;
 
         // useragent parser
-        let parser = UserAgentParser::builder()
-            .with_unicode_support(false)
-            .build_from_yaml("./src/user_agents/regexes.yaml")
-            .expect("Parser creation failed");
+        let parser = crate::ua::user_agent::build_parser();
 
         AppState {
             webauthn,

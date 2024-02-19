@@ -123,13 +123,14 @@ function UserAuthForm() {
 export function SignInUp() {
   return (
     <>
-      <div class="container relative h-[600px] flex-col items-center justify-center md:grid lg:max-w-none lg:px-0">
+      <h1 class="text-6xl font-bold text-center">Playground</h1>
+      <div class="container relative h-[400px] flex-col items-center justify-center sm:grid sm:px-0 pt-[58px] sm:pt-0">
         <div class="lg:p-8">
           <div class="mx-auto flex w-full flex-col justify-center space-y-6 sm:w-[350px]">
             <div class="flex flex-col space-y-2 text-center">
-              <h1 class="text-2xl font-semibold tracking-tight">
+              <h2 class="text-2xl font-semibold tracking-tight">
                 Create an account
-              </h1>
+              </h2>
               <p class="text-muted-foreground text-sm">
                 Enter a username below to create an account.
               </p>

@@ -3,7 +3,14 @@ use axum::{
     extract::FromRequestParts,
     http::{header::USER_AGENT, request::Parts, StatusCode},
 };
-use uaparser::Parser;
+use uaparser::{Parser, UserAgentParser};
+
+pub fn build_parser() -> uaparser::UserAgentParser {
+    UserAgentParser::builder()
+        .with_unicode_support(false)
+        .build_from_bytes(include_bytes!("regexes.yaml"))
+        .expect("Parser creation failed")
+}
 
 pub struct ExtractUserAgent(pub String);
 
