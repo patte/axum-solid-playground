@@ -31,18 +31,12 @@ RUN cargo build --release
 FROM debian:bookworm-slim
 
 # install libssl
-# install ca-certificates fuse3 sqlite3 for litefs
 RUN apt-get update -y && \
     apt-get install -y --no-install-recommends libssl-dev && \
-    apt-get install -y ca-certificates fuse3 sqlite3 && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
-# litefs
-COPY --from=flyio/litefs:0.5 /usr/local/bin/litefs /usr/local/bin/litefs
-COPY litefs.yml /etc/litefs.yml
-
 COPY --from=backend-builder /app/server/target/release/axum-solid-playground /app/main 
 
-# see exec.cmd in litefs.yml
-ENTRYPOINT litefs mount
+EXPOSE 3000
+CMD "/app/main"

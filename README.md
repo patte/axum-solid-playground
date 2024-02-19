@@ -16,7 +16,7 @@ Features:
 - [x] fe: session management: [AuthContext](./client/src/components/auth/AuthContext.tsx)
 - [x] fe: session: detect expire and refresh ui
 - [x] Deployment (fly.io)
-- [x] [litefs](https://fly.io/docs/litefs/) for distributed SQLite
+- [x] ~~[litefs](https://fly.io/docs/litefs/) for distributed SQLite~~ removed, [no websockets](https://github.com/superfly/litefs/issues/427)
 - [x] PR [maxcountryman/tower-sessions-stores#6](https://github.com/maxcountryman/tower-sessions-stores/pull/6)
 - [x] publish crate [tower-sessions-rusqlite-store](https://github.com/patte/tower-sessions-rusqlite-store)
 - [x] [rspc](https://github.com/oscartbeaumont/rspc)? cool idea but 🚫 (no support for axum 0.7)[https://github.com/oscartbeaumont/httpz/blob/main/Cargo.toml#L50] and generally a big mess
@@ -87,22 +87,14 @@ cargo build --release
 The resulting binary is ~8MB.
 
 ### fly.io
-This deployment uses [litefs](https://fly.io/docs/litefs) for distributed SQLite.
-A sidecar reverseproxy that runs inside the same VM as separate process:
-- GET (and HEAD) go to local axum server (read)
-- all other requests are forwarded to axum server in the primary region (write)
-[Based on this line](https://github.com/superfly/litefs/blob/63eab529dc3353e8d159e097ffc4caa7badb8cb3/http/proxy_server.go#L210) only `GET` and `HEAD` requests are read all others are forwarded to the primary.
-The db name `playground.db` must match in `DATABASE_URL` and litefs.yml `proxy.db`.
 
-#### volume and litefs
+#### volume
 Create volume initially:
 ```bash
 fly launch --no-deploy
 
-fly consul attach
-
 # if no volume created during initial launch:
-fly volumes create playground_litefs --region ams --size 3
+fly volumes create playground --region ams --size 3
 ```
 
 #### envs
@@ -112,8 +104,7 @@ fly secrets set \
 RP_ID=axum-solid-playground.fly.dev \
 RP_ORIGIN=https://axum-solid-playground.fly.dev \
 RP_NAME=axum-solid-playground \
-LITEFS_CLOUD_TOKEN=yoursecrettoken \
-DATABASE_URL=sqlite:///litefs/playground.db
+DATABASE_URL=sqlite:///data/playground.db
 ```
 
 #### deploy
@@ -124,10 +115,8 @@ fly deploy
 *image size: 104 MB* (but as our binary is only ~8MB, this is what needs to be pushed in most cases)
 
 #### add clones in other regions
-```bash
-# Add a clone in Johannesburg, South Africa
-fly machine clone --select --region jnb
-```
+Currently there is only one database on one volume (in ams). Litefs, which would enable distributed SQLite, was removed again, mainly to keep things simple and [the limitations with websockets](https://github.com/superfly/litefs/issues/427) . Only one instance can be run at a time.
+
 remove:
 ```bash
 fly machine ls
