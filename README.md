@@ -12,7 +12,7 @@ Features:
 - [x] [Dev proxy](./server/src/proxy.rs) for frontend in backend
 - [x] Prod: embed client js dist in rust binary 
 - [x] Discoverable [passkeys](https://www.passkeys.io/technical-details) for authentication with [webauthn-rs](https://github.com/kanidm/webauthn-rs/blob/d278c56adfa39a0723c79bdcd461644194bc5138/webauthn-rs/src/lib.rs#L1270)
-- [ ] be: session management: [tower-sessions-rusqlite-store](https://github.com/patte/tower-sessions-rusqlite-store)
+- [x] be: session management: [tower-sessions-rusqlite-store](https://github.com/patte/tower-sessions-rusqlite-store)
 - [x] be: roll expire of session on request (max every minute)
 - [x] be: session management: write informative cookie for fe
 - [x] fe: session management: [AuthContext](./client/src/components/auth/AuthContext.tsx)
@@ -23,9 +23,11 @@ Features:
 - [x] publish crate [tower-sessions-rusqlite-store](https://github.com/patte/tower-sessions-rusqlite-store)
 - [x] [rspc](https://github.com/oscartbeaumont/rspc)? cool idea but 🚫 (no support for axum 0.7)[https://github.com/oscartbeaumont/httpz/blob/main/Cargo.toml#L50] and generally a big mess
 - [x] GraphQL with [async-graphql](https://github.com/async-graphql/async-graphql) for typed api between server and client
+- [x] allow users to register additional passkeys
+- [x] ui: passkey details 
 - [ ] security headers
-- [ ] register additional passkeys to user after first, signout all my sessions
-- [ ] ui: passkey details, server info, debug network
+- [ ] signout all my sessions
+- [ ] ui: server info, debug network
 - [ ] github action
 - [ ] websockets?
 - [ ] distributed kv?
@@ -136,9 +138,9 @@ SignUp and SignIn are implemented with passkeys with [webauthn-rs](https://githu
 
 The session is used for the passkey dance as well as to remember the authenticated user.
 A cookie `authenticated_user_js` (http_only=false) is set on successful signin so that the [js frontend knows](./client/src/components/auth/AuthContext.tsx) the user is authenticated and can render appropriatly on first load.
-This cookie is only informative for the client and not used to determine if the user is authenticated on the server.
+This cookie is only informative for the client and not used to determine if the user is authenticated on the server. No auth decision on the server is based on the cookie.
 
-The session have a fixed lifetime of 24 hours and are not rolled over on use.
+The session are rolled every minute (see: roll_expiry_mw). This also keeps the informative cookie fresh.
 
 
 ### Browsers

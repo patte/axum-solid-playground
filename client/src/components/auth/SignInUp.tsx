@@ -14,6 +14,32 @@ import { register, authenticate } from "~/lib/auth";
 import { createSignal } from "solid-js";
 import { useAuth } from "./AuthContext";
 
+export function RegisterButton({
+  buttonText,
+  submitting,
+  onClick,
+}: {
+  buttonText: string;
+  submitting: boolean;
+  onClick: (e: Event) => void;
+}) {
+  return (
+    <Button
+      variant="outline"
+      type="button"
+      disabled={submitting}
+      onClick={onClick}
+    >
+      {submitting ? (
+        <TbLoader class="mr-2 h-4 w-4 animate-spin" />
+      ) : (
+        <TbKey class="mr-2 h-4 w-4" />
+      )}{" "}
+      {buttonText}
+    </Button>
+  );
+}
+
 function UserAuthForm() {
   const [authForm, { Form, Field }] = createForm<AuthForm>();
   const [registrationError, setRegistrationError] = createSignal<string | null>(
@@ -101,19 +127,11 @@ function UserAuthForm() {
         </div>
       </div>
 
-      <Button
-        variant="outline"
-        type="button"
-        disabled={authForm.submitting}
+      <RegisterButton
+        buttonText="Login"
+        submitting={authForm.submitting}
         onClick={handleClickSignIn}
-      >
-        {authForm.submitting ? (
-          <TbLoader class="mr-2 h-4 w-4 animate-spin" />
-        ) : (
-          <TbKey class="mr-2 h-4 w-4" />
-        )}{" "}
-        Login
-      </Button>
+      />
 
       {authenticationError() && <GenericError error={authenticationError()} />}
     </div>

@@ -62,6 +62,7 @@ pub async fn start_register(
     Path(username): Path<String>,
     // error early if user_agent is missing or invalid
     ExtractUserAgent(_user_agent): ExtractUserAgent,
+    ExtractMe(me): ExtractMe,
 ) -> Result<impl IntoResponse, WebauthnError> {
     info!("Start register");
 
@@ -70,24 +71,59 @@ pub async fn start_register(
         return Err(WebauthnError::InvalidUsername);
     }
 
-    // check if username exists
-    if app_state
-        .db
-        .conn
-        .call({
-            let username = username.clone();
-            move |conn| crate::queries::check_username_exists(conn, &username).map_err(|e| e.into())
-        })
-        .await
-        .map_err(|e| {
-            error!("check_username_exists: {:?}", e);
-            WebauthnError::GenericDatabaseError
-        })?
-    {
-        return Err(WebauthnError::UsernameAlreadyExists);
+    let (user, user_is_new) = match me {
+        Some(me) => {
+            if me.username != username {
+                return Err(WebauthnError::RegisterForSelfOnly);
+            }
+            (me, false)
+        }
+        None => (User::new(username.clone()), true),
+    };
+
+    if user_is_new {
+        // check if username exists
+        if app_state
+            .db
+            .conn
+            .call({
+                let username = user.username.clone();
+                move |conn| {
+                    crate::queries::check_username_exists(conn, &username).map_err(|e| e.into())
+                }
+            })
+            .await
+            .map_err(|e| {
+                error!("check_username_exists: {:?}", e);
+                WebauthnError::GenericDatabaseError
+            })?
+        {
+            return Err(WebauthnError::UsernameAlreadyExists);
+        }
     }
 
-    let new_user = User::new(username);
+    // load excluded credentials
+    let exclude_credentials: Option<Vec<CredentialID>> = if user_is_new {
+        None
+    } else {
+        let authenticators = app_state
+            .db
+            .conn
+            .call(move |conn| {
+                crate::queries::get_authenticators_for_user_id(conn, user.id).map_err(|e| e.into())
+            })
+            .await
+            .map_err(|e| {
+                error!("get_authenticators_for_user: {:?}", e);
+                WebauthnError::GenericDatabaseError
+            })?;
+        Some(
+            authenticators
+                .iter()
+                .map(|a| a.passkey.cred_id().clone())
+                .collect(),
+        )
+    };
 
     // Remove any previous registrations that may have occured from the session.
     session.remove_value("reg_state").await.map_err(|e| {
@@ -96,18 +132,16 @@ pub async fn start_register(
     })?;
 
     let res = match app_state.webauthn.start_passkey_registration(
-        new_user.id,
-        &new_user.username,
-        &new_user.username,
-        // This would only be needed if we allow users to register multiple credentials.
-        // atm register is only allowed for new users.
-        None,
+        user.id,
+        &user.username,
+        &user.username,
+        exclude_credentials,
     ) {
         Ok((ccr, reg_state)) => {
             // Store auth state in session. This is only save because session
             // store is server side. A cookie store would enable replay attacks.
             session
-                .insert("reg_state", (new_user, reg_state))
+                .insert("reg_state", (user, user_is_new, reg_state))
                 .await
                 .map_err(|e| {
                     error!("Failed to insert reg_state into session: {:?}", e);
@@ -131,11 +165,12 @@ pub async fn finish_register(
     session: Session,
     cookies: Cookies,
     ExtractUserAgent(user_agent): ExtractUserAgent,
+    ExtractMe(me): ExtractMe,
     Json(reg): Json<RegisterPublicKeyCredential>,
 ) -> Result<impl IntoResponse, WebauthnError> {
     let ua_short = get_user_agent_string_short(&user_agent, &app_state.ua_parser);
 
-    let (new_user, reg_state): (User, PasskeyRegistration) = session
+    let (user, user_is_new, reg_state): (User, bool, PasskeyRegistration) = session
         .get("reg_state")
         .await
         .map_err(|e| {
@@ -162,15 +197,27 @@ pub async fn finish_register(
                 .db
                 .conn
                 .call({
-                    let new_user = new_user.clone();
+                    let user = user.clone();
                     move |conn| {
-                        crate::queries::insert_user_and_passkey(
-                            conn,
-                            new_user,
-                            sk.clone(),
-                            &ua_short,
-                        )
-                        .map_err(|e| e.into())
+                        if user_is_new {
+                            crate::queries::insert_user_and_passkey(
+                                conn,
+                                user,
+                                sk.clone(),
+                                &ua_short,
+                            )
+                            .map_err(|e| e.into())
+                        } else {
+                            crate::queries::insert_authenticator(
+                                conn,
+                                user.id,
+                                sk.clone(),
+                                Utc::now(),
+                                &ua_short,
+                            )
+                            .map_err(|e| e.into())
+                            .map(|_| ())
+                        }
                     }
                 })
                 .await
@@ -182,9 +229,11 @@ pub async fn finish_register(
             info!("finish register successful!");
 
             // set session authenticated
-            set_me_authenticated(new_user.clone(), session, cookies).await?;
+            if me.is_none() {
+                set_me_authenticated(user.clone(), session, cookies).await?;
+            }
 
-            Json(new_user)
+            Json(user)
         }
         Err(e) => {
             error!("finish_passkey_registration: {:?}", e);
@@ -228,8 +277,13 @@ pub async fn finish_register(
 pub async fn start_authentication(
     Extension(app_state): Extension<AppState>,
     session: Session,
+    ExtractMe(me): ExtractMe,
 ) -> Result<impl IntoResponse, WebauthnError> {
     info!("Start Authentication");
+
+    if me.is_some() {
+        return Err(WebauthnError::AlreadySignedIn);
+    }
 
     // Remove any previous authentication that may have occured from the session.
     session.remove_value("auth_state").await.map_err(|e| {
@@ -265,8 +319,13 @@ pub async fn finish_authentication(
     Extension(app_state): Extension<AppState>,
     session: Session,
     cookies: Cookies,
+    ExtractMe(me): ExtractMe,
     Json(auth_input): Json<PublicKeyCredential>,
 ) -> Result<impl IntoResponse, WebauthnError> {
+    if me.is_some() {
+        return Err(WebauthnError::AlreadySignedIn);
+    }
+
     let auth_state: DiscoverableAuthentication = session
         .get("auth_state")
         .await

@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX idx_users_username_unique ON users(username);
