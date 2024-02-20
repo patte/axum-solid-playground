@@ -1,5 +1,6 @@
 use std::env;
 
+use crate::models::User;
 use crate::state::AppState;
 use crate::{error::WebauthnError, ua::user_agent::get_user_agent_string_short};
 use axum::async_trait;
@@ -15,8 +16,6 @@ use tower_cookies::Cookies;
 use tower_sessions::Session;
 
 use webauthn_rs::prelude::*;
-
-use crate::queries::User;
 
 use crate::ua::user_agent::ExtractUserAgent;
 

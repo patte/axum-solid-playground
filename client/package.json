@@ -7,7 +7,8 @@
     "start": "vite",
     "dev": "vite",
     "build": "vite build",
-    "serve": "vite preview"
+    "serve": "vite preview",
+    "codegen": "graphql-codegen --config codegen.ts"
   },
   "license": "MIT",
   "devDependencies": {
@@ -18,11 +19,18 @@
     "typescript": "^5.3.3",
     "vite": "^5.0.11",
     "vite-plugin-solid": "^2.8.2",
-    "vite-tsconfig-paths": "^4.3.1"
+    "vite-tsconfig-paths": "^4.3.1",
+    "@graphql-codegen/cli": "5.0.2",
+    "@graphql-codegen/typescript-document-nodes": "4.0.4"
   },
   "dependencies": {
+    "@graphql-codegen/typed-document-node": "^5.0.4",
+    "@graphql-codegen/typescript": "^4.0.4",
+    "@graphql-codegen/typescript-operations": "^4.1.2",
+    "@graphql-typed-document-node/core": "^3.2.0",
     "@kobalte/core": "^0.12.1",
     "@modular-forms/solid": "^0.20.0",
+    "@solid-primitives/graphql": "^2.0.2",
     "class-variance-authority": "^0.7.0",
     "clsx": "^2.1.0",
     "js-base64": "^3.7.6",

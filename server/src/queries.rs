@@ -1,28 +1,13 @@
 use chrono::{DateTime, Utc};
 use rusqlite::{params, Connection, Result};
-use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 use webauthn_rs::prelude::Passkey;
 
-// Models and queries
+use crate::models::{Authenticator, User};
+
+// db queries
 // Intentionally using rusqlite and not tokio_rusqlite
 // the async wrapping is done where the queries are called.
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct User {
-    pub id: Uuid,
-    pub username: String,
-    pub created_at: DateTime<Utc>,
-}
-impl User {
-    pub fn new(username: String) -> Self {
-        Self {
-            id: Uuid::now_v7(),
-            username,
-            created_at: Utc::now(),
-        }
-    }
-}
 
 pub fn insert_user(conn: &Connection, user: User) -> Result<usize> {
     conn.execute(
@@ -172,14 +157,6 @@ pub fn get_all_users(conn: &Connection) -> Result<Vec<User>> {
         })?
         .collect();
     users
-}
-
-#[derive(Debug, Clone, Serialize)]
-pub struct Authenticator {
-    pub user_id: Uuid,
-    pub passkey: Passkey,
-    pub user_agent_short: String,
-    pub created_at: DateTime<Utc>,
 }
 
 pub fn get_authenticators_for_user_id(

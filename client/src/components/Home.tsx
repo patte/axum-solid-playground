@@ -2,6 +2,7 @@ import { SignInUp } from "~/components/auth/SignInUp";
 import { useAuth } from "~/components/auth/AuthContext";
 import { Show } from "solid-js";
 import { Card } from "~/components/ui/card";
+import Account from "./Account";
 
 function Welcome() {
   const { me } = useAuth();
@@ -19,6 +20,7 @@ export default function Home() {
   return (
     <Show when={isSignedIn()} fallback={<SignInUp />}>
       <Welcome />
+      <Account />
     </Show>
   );
 }

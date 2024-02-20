@@ -23,11 +23,14 @@ use tower_sessions_rusqlite_store::RusqliteStore;
 
 mod error;
 
-use crate::auth::{
-    finish_authentication, finish_register, get_me, get_my_authenticators, signout,
-    start_authentication, start_register,
-};
 use crate::state::AppState;
+use crate::{
+    auth::{
+        finish_authentication, finish_register, get_me, get_my_authenticators, signout,
+        start_authentication, start_register,
+    },
+    graphql::{graphiql, graphql_handler},
+};
 
 // enables !info, !warn, etc.
 #[macro_use]
@@ -35,6 +38,8 @@ extern crate tracing;
 
 mod auth;
 mod db;
+mod graphql;
+mod models;
 mod queries;
 mod state;
 mod ua {
@@ -88,11 +93,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .expect("Invalid LISTEN_HOST_PORT environment variable");
     let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
 
+    let schema = graphql::build_schema(app_state.clone());
+
     let router = Router::new()
         .route("/health", get(|| async { "OK" }))
         .route("/me", get(get_me))
         .route("/me/authenticators", get(get_my_authenticators))
         .route("/debug", get(get_debug))
+        .route("/graphql", get(graphiql).post(graphql_handler))
         .route_layer(middleware::from_fn(auth::roll_expiry_mw))
         // ⬇️ these routes don't have the middleware ⬆️ applied
         .route("/register_start/:username", post(start_register))
@@ -100,6 +108,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/authenticate_start", post(start_authentication))
         .route("/authenticate_finish", post(finish_authentication))
         .route("/signout", post(signout))
+        .layer(Extension(schema))
         .layer(Extension(app_state))
         .layer(session_layer.clone())
         .layer(CookieManagerLayer::new())

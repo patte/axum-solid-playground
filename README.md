@@ -2,6 +2,8 @@
 
 Test your passkeys at: https://axum-solid-playground.fly.dev
 
+A project to try out axum and solidjs, with a focus on authentication with discoverable passkeys.
+
 Features:
 - [x] Rust backend with [axum](https://github.com/tokio-rs/axum)
 - [x] Database integration: rusqlite
@@ -20,7 +22,7 @@ Features:
 - [x] PR [maxcountryman/tower-sessions-stores#6](https://github.com/maxcountryman/tower-sessions-stores/pull/6)
 - [x] publish crate [tower-sessions-rusqlite-store](https://github.com/patte/tower-sessions-rusqlite-store)
 - [x] [rspc](https://github.com/oscartbeaumont/rspc)? cool idea but 🚫 (no support for axum 0.7)[https://github.com/oscartbeaumont/httpz/blob/main/Cargo.toml#L50] and generally a big mess
-- [ ] typed api between server and client? GraphQL!
+- [x] GraphQL with [async-graphql](https://github.com/async-graphql/async-graphql) for typed api between server and client
 - [ ] security headers
 - [ ] register additional passkeys to user after first, signout all my sessions
 - [ ] ui: passkey details, server info, debug network

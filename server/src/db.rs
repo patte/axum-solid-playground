@@ -8,7 +8,6 @@ use tokio_rusqlite::Connection;
 #[derive(Clone)]
 pub struct DB {
     pub conn: Connection,
-    //pub store: Store,
 }
 
 static MIGRATIONS_DIR: Dir = include_dir!("$CARGO_MANIFEST_DIR/migrations");

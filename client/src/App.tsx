@@ -5,6 +5,7 @@ import { ColorModeToggle } from "~/components/ColorModeToggle";
 import { cn } from "~/lib/utils";
 import { AuthProvider } from "./components/auth/AuthContext";
 import SignOutButton from "./components/auth/SignOutButton";
+import { GraphQLProvider } from "./components/GraphQLContext";
 
 const App: Component = () => {
   return (
@@ -14,7 +15,9 @@ const App: Component = () => {
           <SignOutButton />
           <ColorModeToggle />
         </div>
-        <Home />
+        <GraphQLProvider>
+          <Home />
+        </GraphQLProvider>
       </AuthProvider>
     </ColorModeProvider>
   );
