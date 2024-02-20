@@ -2,8 +2,6 @@
 
 Test your passkeys at: https://axum-solid-playground.fly.dev
 
-A chaotic project to try out many things.
-
 Features:
 - [x] Rust backend with [axum](https://github.com/tokio-rs/axum)
 - [x] Database integration: rusqlite
