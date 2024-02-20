@@ -21,7 +21,7 @@ Features:
 - [x] ~~[litefs](https://fly.io/docs/litefs/) for distributed SQLite~~ removed, [no websockets](https://github.com/superfly/litefs/issues/427)
 - [x] PR [maxcountryman/tower-sessions-stores#6](https://github.com/maxcountryman/tower-sessions-stores/pull/6)
 - [x] publish crate [tower-sessions-rusqlite-store](https://github.com/patte/tower-sessions-rusqlite-store)
-- [x] [rspc](https://github.com/oscartbeaumont/rspc)? cool idea but 🚫 (no support for axum 0.7)[https://github.com/oscartbeaumont/httpz/blob/main/Cargo.toml#L50] and generally a big mess
+- [x] [rspc](https://github.com/oscartbeaumont/rspc)? cool idea but 🚫 [no support for axum 0.7](https://github.com/oscartbeaumont/httpz/blob/main/Cargo.toml#L50) and generally a big mess
 - [x] GraphQL with [async-graphql](https://github.com/async-graphql/async-graphql) for typed api between server and client
 - [x] allow users to register additional passkeys
 - [x] ui: passkey details 
