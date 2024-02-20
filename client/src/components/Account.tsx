@@ -66,7 +66,7 @@ export default function Account() {
 
   const timer = setInterval(() => {
     refetch();
-  }, 1000 * 10);
+  }, 1000 * 15);
   onCleanup(() => clearInterval(timer));
 
   return (
@@ -103,9 +103,13 @@ export default function Account() {
             if (!isOpen) setShowAuthId(null);
           }}
         >
-          <SheetContent position={"left"} size={"content"} class="pb-0 pt-0">
+          <SheetContent
+            position={"left"}
+            size={"content"}
+            class="w-screen md:w-auto h-full pb-0 pt-0"
+          >
             <SheetHeader class="h-full">
-              <SheetDescription class="h-full overflow-y-auto py-6">
+              <SheetDescription class="text-left h-full overflow-y-auto py-6">
                 <pre
                   innerHTML={jsonFormatHighlight(
                     meGraphQL()?.me?.authenticators.find(

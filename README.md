@@ -2,7 +2,7 @@
 
 Test your passkeys at: https://axum-solid-playground.fly.dev
 
-A project to try out axum and solidjs, with a focus on authentication with discoverable passkeys.
+A chaotic project to try out many things.
 
 Features:
 - [x] Rust backend with [axum](https://github.com/tokio-rs/axum)
