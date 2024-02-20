@@ -1,6 +1,7 @@
 use crate::{
-    auth::ExtractMe,
     models::{Authenticator, User},
+    queries,
+    session::ExtractMe,
     state::AppState,
 };
 use async_graphql::{
@@ -42,17 +43,18 @@ pub async fn graphql_handler(
 }
 
 // impl resolvers for our types
+// TODO: organize this better
 
 #[ComplexObject]
 impl User {
     async fn authenticators(&self, ctx: &async_graphql::Context<'_>) -> Vec<Authenticator> {
-        let app_state = ctx.data::<crate::state::AppState>().unwrap();
+        let app_state = ctx.data::<AppState>().unwrap();
         let me_id = self.id.clone();
         app_state
             .db
             .conn
             .call(move |conn| {
-                crate::queries::get_authenticators_for_user_id(conn, me_id).map_err(|e| e.into())
+                queries::get_authenticators_for_user_id(conn, me_id).map_err(|e| e.into())
             })
             .await
             .unwrap()
